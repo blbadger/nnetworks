@@ -47,9 +47,6 @@ image_count = len(list(data_dir.glob('*/*.png')))
 
 CLASS_NAMES = np.array([item.name for item in data_dir.glob('*') if item.name not in ['._.DS_Store', '._DS_Store', '.DS_Store']])
 
-### Print out the class names to make sure that phantom classes are not included. '._.DS_Store' 
-### or variations on this are common names for such classes of size 0.
-
 print (CLASS_NAMES)
 
 ### Rescale image bit depth to 8 (if image is 12 or 16 bits) and resize images to 256x256, if necessary
@@ -61,18 +58,9 @@ IMG_HEIGHT, IMG_WIDTH = 256, 256
 image_generator = tf.keras.preprocessing.image.ImageDataGenerator(rescale=1./255)
 BATCH_SIZE = 400
 
-
-### Keras data generator: assigns the iterable output of image_generator.flow_from_directory() to the 
-### variable train_data_gen1, which denotes that this is a training set generated via Keras preprocessing.  
-### Most arguments are already specified.  'shuffle' indicates whether or not to randomize images between
-### batches (ie between epochs) and 'subset' clarifies which image set is being used (but is not strictly
-### necessary)
-
 train_data_gen1 = image_generator.flow_from_directory(directory=str(data_dir),
 	batch_size=BATCH_SIZE, shuffle=True, target_size=(IMG_HEIGHT,IMG_WIDTH), 
 		classes=list(CLASS_NAMES), subset = 'training')
-
-### Repeat initialization of the Keras data generator for the remaining datasets
 
 CLASS_NAMES = np.array([item.name for item in data_dir2.glob('*') if item.name not in ['._.DS_Store', '.DS_Store', '._DS_Store']])
 
@@ -156,18 +144,11 @@ model = tf.keras.models.Sequential([
     Dense(2, activation='softmax')
 ])
 
-### Compile model: choose loss and optimization functions
-
 model.compile(optimizer='Adam', 
 	loss = 'categorical_crossentropy', 
 	metrics=['accuracy'])
 
-### Displays details of each layer output in the model 
-
 model.summary()
-
-### Trains the neural network, and print the progress at the end of each epoch
-### (signified by verbose=2)
 
 model.fit(x_train, y_train, epochs=9, batch_size = 20, verbose=2)
 
@@ -205,18 +186,12 @@ def plot_image(i, predictions, true_label, img):
         'Snf7' if prediction[0]>=0.5 else 'Control', 
         'Snf7' if true_label[0]==1. else 'Control'), color = color)
 
-### I am not sure why the num_cols and num_rows do not add up to the total figsize, 
-### but keep this in mind when planning for a new figure size and shape
 
 num_rows = 4
 num_cols = 3
 num_images = 24
 
-### Plot initialization
-
 plt.figure(figsize = (num_rows, num_cols))
-
-### Plot assembly and display
 
 for i in range(num_images):
   plt.subplot(num_rows, 2*num_cols, i+1)

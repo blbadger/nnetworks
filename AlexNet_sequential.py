@@ -36,7 +36,7 @@ AUTOTUNE = tf.data.experimental.AUTOTUNE
 
 data_dir = pathlib.Path('/home/bbadger/Desktop/NN_snf7',  fname='Combined')
 data_dir2 = pathlib.Path('/home/bbadger/Desktop/NN_snf7_2', fname='Combined')
-data_dir3 = pathlib.Path('/home/bbadger/Desktop/NN_snf7_2', fname='Combined')
+data_dir3 = pathlib.Path('/home/bbadger/Desktop/NN_snf7_3', fname='Combined')
 
 ### Assigns the size of the dataset in data_dir to the variable image_count, which is then 
 ### used to determine the BATCH_SIZE argument for the image_generator.flow_from_directory() function.

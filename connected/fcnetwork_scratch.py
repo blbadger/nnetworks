@@ -11,7 +11,6 @@ class FullNetwork:
 		self.biases = []
 		for layer in architecture:
 			self.biases.append([0.5 for i in range(layer)])
-		print (self.biases)
 
 		# initialize weights of 0.5 to start
 		self.weights = []

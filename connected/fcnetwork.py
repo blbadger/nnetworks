@@ -2,8 +2,7 @@
 # A fully connected feed-forward neural network from scratch 
 # (allowing for numpy & random).  Stochastic gradient descent 
 # cost function minimization, the option of ReLu or sigmoid 
-# activation functions, learning rate decay, and optional minibatch
-# bootstrapping.
+# activation functions, trained on individual training examples
 
 ### TODO: network only learns with sigmoid activation function: fix
 ### relu design to test this function as well.
@@ -119,22 +118,18 @@ class FullNetwork:
 			dc_db.append(error)
 			dc_dw.append(np.dot(error, activations[-i-1].transpose()))
 
-		# return gradient of the cost function
+		# update weights and biases
 		dc_db.reverse()
 		dc_dw.reverse()
 		dc_dw = np.array(dc_dw)
 
-		nabla_b = np.array([np.zeros(b.shape) for b in self.biases])
-		nabla_w = np.array([np.zeros(w.shape) for w in self.weights])
+		partial_db = [dnb for dnb in dc_db]
+		partial_dw = [dnw.transpose() for dnw in dc_dw]
 
-
-		nabla_b = [nb+dnb for nb, dnb in zip(nabla_b, dc_db)]
-		nabla_w = [nw+dnw.transpose() for nw, dnw in zip(nabla_w, dc_dw)]
-
+		# gradient descent (move the opposite direction of the gradient)
 		lr = learning_rate
-		self.weights = [w - (lr/5)*nw for w, nw in zip(self.weights, nabla_w)]
-		self.biases = [b - (lr/5)*nb for b, nb in zip(self.biases, nabla_b)]
-
+		self.weights = [w - lr*dw for w, dw in zip(self.weights, partial_dw)]
+		self.biases = [b - lr*db for b, db in zip(self.biases, partial_db)]
 
 
 import mnist_loader
@@ -144,7 +139,7 @@ training_data, validation_data, test_data = mnist_loader.load_data_wrapper()
 
 net = fcnetwork.FullNetwork([784, 20, 10], activation_function='sigmoid')
 
-net.gradient_descent(training_data, 20, 3, bootstrap=False) # data, epochs, learning_rate, bootstrap
+net.gradient_descent(training_data, 20, 0.1, bootstrap=False) # data, epochs, learning_rate, bootstrap
 
 
 

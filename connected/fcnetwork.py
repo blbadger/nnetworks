@@ -1,6 +1,6 @@
 #! fcnetwork.py
 # A fully connected feed-forward neural network from scratch 
-# (allowing for numpy & random).  Stochastic gradient descent 
+# (allowing for numpy & random).  Gradient descent for quadratic
 # cost function minimization, the option of ReLu or sigmoid 
 # activation functions, trained on individual training examples
 
@@ -70,6 +70,7 @@ class FullNetwork:
 
 
 	def cost_function_derivative(self, output_activations, y):
+		# quadratic cost function derivative
 		return output_activations - y
 
 
@@ -81,7 +82,7 @@ class FullNetwork:
 			for entry in data:
 				self.update_network(entry, learning_rate)
 			number_correct = self.evaluate(data)
-			number_total = 50000
+			number_total = len(data)
 			print ('Epoch {} complete: {} / {}'.format(epoch, number_correct, number_total))
 
 
@@ -110,6 +111,7 @@ class FullNetwork:
 		dc_db.append(error)
 		dc_dw.append(np.dot(error, activations[-2].transpose()))
 
+
 		# backpropegate to previous layers
 		for i in range(2, self.item_length):
 			error = np.dot(self.weights[-i+1], error) * self.activation_prime(z_vectors[-i])
@@ -133,11 +135,10 @@ class FullNetwork:
 
 
 import mnist_loader
-import fcnetwork
 
 training_data, validation_data, test_data = mnist_loader.load_data_wrapper()
 
-net = fcnetwork.FullNetwork([784, 20, 10], activation_function='sigmoid')
+net = FullNetwork([784, 20, 10], activation_function='sigmoid')
 
 net.gradient_descent(training_data, 20, 0.1, bootstrap=False) # data, epochs, learning_rate, bootstrap
 

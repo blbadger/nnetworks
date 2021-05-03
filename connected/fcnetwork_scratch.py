@@ -1,46 +1,63 @@
 #! fcnetwork_scratch.py
-# A fully connected feed-forward neural network from scratch,
-# using no libraries.
+# A fully connected feed-forward neural network from scratch 
+# (no numpy, only core libraries).  Stochastic gradient descent 
+# cost function minimization, the option of ReLu or sigmoid 
+# activation functions, trained on individual training examples
 
-###TODO: finish converting network off numpy starting points.
+### TODO: network only learns with sigmoid activation function: fix
+### relu design to test this function as well.
+import random
 
-class FullNetwork:
+class FullNetworkScratch:
 
 	def __init__(self, architecture, activation_function):
-		# initialize biases of 0.5 to start
-		self.biases = []
-		for layer in architecture:
-			self.biases.append([0.5 for i in range(layer)])
 
-		# initialize weights of 0.5 to start
+		# initialize biases
+		self.biases = []
+		for layer in architecture[1:]:
+			temp = []
+			for i in range(layer):
+				# initial biases 
+				temp.append(random.gauss(0, 1)) 
+			self.biases.append(temp)
+
+		# initialize weights
 		self.weights = []
 		for i in range(1, len(architecture)):
-			j = architecture[i]
-			k = architecture[i-1]
-			self.weights.append(np.random.randn(k, j))
+			layer = []
+			for j in range(architecture[i]):
+				temp = []
+				for k in range(architecture[i-1]):
+					# initial weights 
+					temp.append(random.gauss(0, 1)) 
+				layer.append(temp)
+			self.weights.append(layer)
 
+		# misc. init
+		self.arc = architecture
 		self.activation = activation_function
+		self.item_length = len(architecture)
 
 
 	def activation_function(self, z):
-		# Activation function, rectified linear unit
-
-		z = np.array(z)
+		# Activation function for a single element
 		if self.activation == 'relu':
-			return max(0, z)
+			for i in range(len(z)):
+				for j in range(len(z[i])):
+					z[i][j] = max(0, z[i][j])
+			return z
 
 		if self.activation == 'sigmoid':
-			return 1 / (1 + np.exp(-z))
+			return 1 / (1 + 2.71828**(-1*z))
 
 
 	def activation_prime(self, z):
-		# derivative of ReLu function
-
+		# derivative of activation function for a single element
 		if self.activation == 'relu':
-			if z == 0:
-				return 0
-			else:
-				return 1
+			for i in range(len(z)):
+				if z[i] > 0:
+					z[i] = 1
+			return z
 
 		if self.activation == 'sigmoid':
 			return self.activation_function(z)*(1 - self.activation_function(z))
@@ -48,91 +65,141 @@ class FullNetwork:
 
 	def network_output(self, output):
 		# Feed-forward network output
-
-		for index in range(self.item_length):
+		for index in range(self.item_length-1):
 			weight, bias = self.weights[index], self.biases[index]
-			output = self.activation_function(np.dot(weight, output) + bias)
-
+			z_matrix = []
+			total = 0
+			for w, o in zip(weight, output):
+				total += w * o
+			z_matrix.append(total + bias)
+		output = self.activation_function(z_matrix)
 		return output
 
 
-	def evaluate(self, data):
-		# Evaluate network performance on dataset
+	def evaluate(self, test_data):
+		total = 0
+		for data in test_data:
+			x, y = data
+			outputs = self.network_output(x)
+			for output in outputs:
+				index = 0
+				for i in range(len(output)):
+					if output[i] > output[index]:
+						index = i
 
-		results = [max(self.network_output(x), y) for x, y in data]
-		return sum([i for i in results if int(x) == y])
+				index2 = 0
+				for i in range(len(y)):
+					if y[i] > y[index2]:
+						index2 = i
+
+				if index == index2:
+					total += 1
+
+		return total
 
 
 	def cost_function_derivative(self, output_activations, y):
+		# works on lists
 		return output_activations - y
 
 
 	def gradient_descent(self, data, epochs, learning_rate, bootstrap=False):
 		# Trains neural network using stochastic gradient descent 
 		# with optional bootstrapping.
-
 		data = list(data)
 		for epoch in range(epochs):
 			for entry in data:
-				self.update_network(entry)
-				break
+				self.update_network(entry, learning_rate)
 
-			print ('Epoch {0:01d} complete: {0:02d} /  \
-				{0:03d} '.format(epoch, self.evaluate(data), 50000))
+			number_correct = self.evaluate(data[:10000])
+			number_total = len(data[:10000])
+			print ('Epoch {} complete: {} / {}'.format(epoch, number_correct, number_total))
 
 
-	def update_network(self, entry):
+	def update_network(self, entry, learning_rate):
 		_input, classification = entry
 
 		# set input activation
-		activation = _input
+		activation = [i[0] for i in _input] # convert to list
 		activations = [activation]
 		z_vectors = []
 
 		# compute subsequent layer activations and z vectors
 		for i in range(1, self.item_length):
-			z_vector = np.dot(self.weights[i-1].transpose(), activation) + self.biases[i-1]
-			activation = self.activation_function(z_vector)
-			activations.append(activation)
+			z_vector = []
+			for j in range(len(self.weights[i-1])):
+				total = 0
+				for k in range(len(self.weights[i-1][j])):
+					total += self.weights[i-1][j][k] * activation[k]
+				z_vector.append(total + self.biases[i-1][j])
+			new_activation = []
+			for i in range(len(z_vector)):
+				# sigmoid function activation
+				new_activation.append(1 / (1 + 2.71828**(-1*z_vector[i])))
+			activations.append(new_activation)
 			z_vectors.append(z_vector)
 
 		# compute output error
-		error = self.cost_function_derivative(activations[-1], classification) \
-				* self.activation_prime(z_vectors[-1])
+		error = []
+		for i in range(len(z_vectors[-1])):
+			diff = self.cost_function_derivative(z_vectors[-1][i], classification[i])
+			val = diff * self.activation_prime(z_vectors[-1][i])
+			val = val[0]
+			error.append(val)
 
 		# Find partial derivatives of the last layer wrt error
-		dc_db = []
+		dc_db = [error]
 		dc_dw = []
-		dc_db.append(error)
-		dc_dw.append(np.dot(error, activations[-2].transpose()))
+
+		# dc_dw.append(np.dot(error, activations[-2].transpose()))
+		print (activations[-2])
+		print (error)
+		for i in range(len(error)):
+			total = 0
+			for j in range(len(error[-2][i])):
+				total += error[i] * activations[-2][j]
+			dc_dw.append(total)
+		print (dc_dw)
 
 		# backpropegate to previous layers
 		for i in range(2, self.item_length):
-			error = np.dot(self.weights[-i+1], error) * self.activation_prime(z_vectors[-i])
+			dot_product = []
+			for j in range(len(self.weights[-i+1])):
+				total = 0
+				for k in range(len(self.weights[-i+1])):
+					total += self.weights[-i+1][j][k] * error[k]
+				dot_product.append(total)
+			activation_primes = []
+
+			# self.activation_prime(z_vectors[-i][j] for j in range(len(z_vectors[-i])))
+			# error = [i*j for i, j in zip(dot_product, self.activation_prime(z_vectors))]
 
 			# update partial derivatives with new error
 			dc_db.append(error)
+			dot_prod = []
+			for i in range(len(error)):
+				print (error[i])
 			dc_dw.append(np.dot(error, activations[-i-1].transpose()))
 
-		# return gradient of the cost function
+		# update weights and biases
 		dc_db.reverse()
 		dc_dw.reverse()
-		return dc_db, dc_dw
+
+		partial_db = [dnb for dnb in dc_db]
+		partial_dw = [dnw.transpose() for dnw in dc_dw]
+
+		# gradient descent (move the opposite direction of the gradient)
+		lr = learning_rate
+		self.weights = [w - lr*dw for w, dw in zip(self.weights, partial_dw)]
+		self.biases = [b - lr*db for b, db in zip(self.biases, partial_db)]
 
 
+### MNIST loading framework from Nielsen
 import mnist_loader
-import fcnetwork
 
 training_data, validation_data, test_data = mnist_loader.load_data_wrapper()
 
-net = fcnetwork.FullNetwork([784, 20, 10], activation_function='sigmoid')
 
-net.gradient_descent(training_data, 5, 3, bootstrap=False) # data, epochs, learning_rate, bootstrap
+net = FullNetworkScratch([784, 20, 10], activation_function='sigmoid')
 
-
-
-
-
-
-
-
+net.gradient_descent(training_data, 20, 0.1, bootstrap=False) # data, epochs, learning_rate, bootstrap

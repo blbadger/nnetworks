@@ -111,7 +111,6 @@ class FullNetwork:
 		dc_db.append(error)
 		dc_dw.append(np.dot(error, activations[-2].transpose()))
 
-
 		# backpropegate to previous layers
 		for i in range(2, self.item_length):
 			error = np.dot(self.weights[-i+1], error) * self.activation_prime(z_vectors[-i])

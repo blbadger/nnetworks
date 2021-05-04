@@ -25,7 +25,6 @@ def load_data_wrapper():
 	return (training_data, validation_data, test_data)
 
 
-
 def vectorized_result(j):
 	e = np.zeros((10, 1))
 	e[j] = 1

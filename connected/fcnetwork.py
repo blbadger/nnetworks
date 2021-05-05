@@ -59,7 +59,7 @@ class FullNetwork:
 
 		for index in range(self.item_length-1):
 			weight, bias = self.weights[index], self.biases[index]
-			output = self.activation_function(np.dot(weight.transpose(), output) + bias)
+			output = self.activation_function(np.dot(weight.T, output) + bias)
 
 		return output
 
@@ -79,10 +79,10 @@ class FullNetwork:
 		# with optional bootstrapping.
 		data = list(data)
 		for epoch in range(epochs):
-			for entry in data:
+			for entry in data[:40000]:
 				self.update_network(entry, learning_rate)
-			number_correct = self.evaluate(data)
-			number_total = len(data)
+			number_correct = self.evaluate(data[40000:50000])
+			number_total = len(data[40000:50000])
 			print ('Epoch {} complete: {} / {}'.format(epoch, number_correct, number_total))
 
 
@@ -96,20 +96,19 @@ class FullNetwork:
 
 		# compute subsequent layer activations and z vectors
 		for i in range(1, self.item_length):
-			z_vector = np.dot(self.weights[i-1].transpose(), activation) + self.biases[i-1]
+			z_vector = np.dot(self.weights[i-1].T, activation) + self.biases[i-1]
 			activation = self.activation_function(z_vector)
 			activations.append(activation)
 			z_vectors.append(z_vector)
 
 		# compute output error
-		error = self.cost_function_derivative(activations[-1], classification) \
-				* self.activation_prime(z_vectors[-1])
+		error = self.cost_function_derivative(activations[-1], classification) * self.activation_prime(z_vectors[-1])
 
 		# Find partial derivatives of the last layer wrt error
 		dc_db = []
 		dc_dw = []
 		dc_db.append(error)
-		dc_dw.append(np.dot(error, activations[-2].transpose()))
+		dc_dw.append(np.dot(error, activations[-2].T))
 
 		# backpropegate to previous layers
 		for i in range(2, self.item_length):
@@ -117,15 +116,16 @@ class FullNetwork:
 
 			# update partial derivatives with new error
 			dc_db.append(error)
-			dc_dw.append(np.dot(error, activations[-i-1].transpose()))
+			dc_dw.append(np.dot(error, activations[-i-1].T))
 
 		# update weights and biases
 		dc_db.reverse()
 		dc_dw.reverse()
+
 		dc_dw = np.array(dc_dw)
 
 		partial_db = [dnb for dnb in dc_db]
-		partial_dw = [dnw.transpose() for dnw in dc_dw]
+		partial_dw = [dnw.T for dnw in dc_dw]
 
 		# gradient descent (move the opposite direction of the gradient)
 		lr = learning_rate

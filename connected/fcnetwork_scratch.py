@@ -1,11 +1,14 @@
 #! fcnetwork_scratch.py
 # A fully connected feed-forward neural network from scratch 
 # (no numpy, only core libraries).  Stochastic gradient descent 
-# cost function minimization, the option of ReLu or sigmoid 
-# activation functions, trained on individual training examples
+# with a quadratic network cost function and sigmoid neuron
+# activation functions, trained on individual training examples.
 
-### TODO: network only learns with sigmoid activation function: fix
-### relu design to test this function as well.
+### Nota Bene: this network is slow relative to fcnetwork.py, as
+### all calculations are performed element-wise rather than matrix-
+### wise as is the case for numpy (which arranges elements in 
+### contiguous memory blocks and performs operations on the ensemble).
+### Training and test sets are reduced in number because of this.
 import random
 
 class FullNetworkScratch:
@@ -18,18 +21,18 @@ class FullNetworkScratch:
 			temp = []
 			for i in range(layer):
 				# initial biases 
-				temp.append(random.gauss(0, 1)) 
+				temp.append(random.normalvariate(0, 1)) 
 			self.biases.append(temp)
 
 		# initialize weights
 		self.weights = []
 		for i in range(1, len(architecture)):
 			layer = []
-			for j in range(architecture[i]):
+			for j in range(architecture[i-1]):
 				temp = []
-				for k in range(architecture[i-1]):
+				for k in range(architecture[i]):
 					# initial weights 
-					temp.append(random.gauss(0, 1)) 
+					temp.append(random.normalvariate(0, 1)) 
 				layer.append(temp)
 			self.weights.append(layer)
 
@@ -61,17 +64,21 @@ class FullNetworkScratch:
 
 	def network_output(self, input_ls):
 		# Feed-forward network output
+		z_matrix = []
+		input_ls = [i[0] for i in input_ls]
+
 		for index in range(self.item_length-1):
 			weight, bias = self.weights[index], self.biases[index]
-			z_matrix = []
-			total = 0
+			total_ls = [0 for i in range(len(bias))]
 			for j, w_vec in enumerate(weight):
-				total = 0
 				for i in range(len(w_vec)):
-					total += w_vec[i] * input_ls[i][0]
-				z_matrix.append(total + bias[j])
+					total_ls[i] += w_vec[i] * input_ls[j]
+
+			z_matrix.append(total_ls)
+			input_ls = [self.activation_function(i) for i in total_ls]
+
 		
-		output = [self.activation_function(i) for i in z_matrix]
+		output = [self.activation_function(i) for i in z_matrix[-1]]
 		return output
 
 
@@ -97,7 +104,7 @@ class FullNetworkScratch:
 
 
 	def cost_function_derivative(self, output_activations, y):
-		# works on lists
+		# cost function derivate for individual node
 		return output_activations - y
 
 
@@ -107,11 +114,11 @@ class FullNetworkScratch:
 		data = list(data)
 
 		for epoch in range(epochs):
-			for entry in data[:100]:
+			for entry in data[:200]:
 				self.update_network(entry, learning_rate)
 
-			number_correct = self.evaluate(data[:100])
-			number_total = len(data[:100])
+			number_correct = self.evaluate(data[:200])
+			number_total = len(data[:200])
 			print ('Epoch {} complete: {} / {}'.format(epoch, number_correct, number_total))
 
 
@@ -126,31 +133,34 @@ class FullNetworkScratch:
 		# compute subsequent layer activations and z vectors
 		for i in range(1, self.item_length):
 			z_vector = []
-			for j in range(len(self.weights[i-1])):
+
+			for j in range(len(self.weights[i-1][0])):
 				total = 0
-				for k in range(len(self.weights[i-1][j])):
-					total += self.weights[i-1][j][k] * activation[k]
+				for k in range(len(activation)):
+					total += self.weights[i-1][k][j] * activation[k]
 				z_vector.append(total + self.biases[i-1][j])
+
 			new_activation = []
+
 			for i in range(len(z_vector)):
-				# sigmoid function activation
-				new_activation.append(1 / (1 + 2.71828**(-1*z_vector[i])))
+				new_activation.append(self.activation_function(z_vector[i]))
 			activations.append(new_activation)
+			activation = new_activation
 			z_vectors.append(z_vector)
 
 		# compute output error
+		classification = [i[0] for i in classification]
+
 		error = []
 		for i in range(len(z_vectors[-1])):
-			diff = self.cost_function_derivative(z_vectors[-1][i], classification[i])
+			diff = self.cost_function_derivative(activations[-1][i], classification[i])
 			val = diff * self.activation_prime(z_vectors[-1][i])
-			val = val[0]
 			error.append(val)
 
 		# Find partial derivatives of the last layer wrt error
 		dc_db = [error]
 		dc_dw = []
 		temp_dw = []
-
 		for err in error:
 			temp = []
 			for act in activations[-2]:
@@ -161,22 +171,23 @@ class FullNetworkScratch:
 		# backpropegate to previous layers
 		for i in range(2, self.item_length):
 			dot_product = []
-			for j in range(len(self.weights[-i])):
+			for j in range(len(self.weights[-i+1])):
 				total = 0
-				for k in range(len(self.weights[-i+1])):
-					total += self.weights[-i][j][k] * error[k]
+				for k in range(len(self.weights[-i+1][j])):
+					total += self.weights[-i+1][j][k] * error[k]
 				dot_product.append(total)
+
 			activation_primes = []
 			for j in range(len(z_vectors[-i])):
 				activation_primes.append(self.activation_prime(z_vectors[-i][j]))
 
-			error = [i*j for i, j in zip(dot_product, activation_primes)]
+			error = [x*y for x, y in zip(dot_product, activation_primes)]
 
 			# update partial bias derivatives 
 			dc_db.append(error)
-			temp_dw = []
-
+			
 			# update partial weights derivatives (same as above)
+			temp_dw = []
 			for err in error:
 				temp = []
 				for act in activations[-i-1]:
@@ -199,7 +210,8 @@ class FullNetworkScratch:
 		for i in range(len(self.weights)):
 			for j in range(len(self.weights[i])):
 				for k in range(len(self.weights[i][j])):
-					self.weights[i][j][k] = self.weights[i][j][k] - lr * dc_dw[i][j][k]
+					self.weights[i][j][k] = self.weights[i][j][k] - lr * dc_dw[i][k][j]
+
 
 
 ### MNIST loading framework from Nielsen
@@ -207,8 +219,7 @@ import mnist_loader
 
 training_data, validation_data, test_data = mnist_loader.load_data_wrapper()
 
-
 net = FullNetworkScratch([784, 20, 10], activation_function='sigmoid')
 
-net.gradient_descent(training_data, 20, 3, bootstrap=False) # data, epochs, learning_rate, bootstrap
+net.gradient_descent(training_data, 50, 0.1) # data, epochs, learning_rate
 

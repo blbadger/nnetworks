@@ -150,6 +150,9 @@ class FullNetworkScratch:
 			activation = new_activation
 			z_vectors.append(z_vector)
 
+		self.backpropegate_error(classification, activations, z_vectors, learning_rate)
+
+	def backpropegate_error(self, classification, activations, z_vectors, learning_rate):
 		# compute output error
 		classification = [i[0] for i in classification]
 

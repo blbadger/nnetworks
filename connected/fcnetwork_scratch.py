@@ -54,8 +54,10 @@ class FullNetworkScratch:
 	def activation_prime(self, z):
 		# derivative of activation function for a single element
 		if self.activation == 'relu':
-			if z[i] > 0:
-				z[i] = 1
+			if z > 0:
+				z = 1
+			else:
+				z = 0
 			return z
 
 		if self.activation == 'sigmoid':

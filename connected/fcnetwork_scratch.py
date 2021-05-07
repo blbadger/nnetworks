@@ -2,7 +2,7 @@
 # A fully connected feed-forward neural network from scratch 
 # (no numpy, only core libraries).  Stochastic gradient descent 
 # with a quadratic network cost function and sigmoid neuron
-# activation functions, trained on individual training examples.
+# activation functions, and on-line learning (minibatches of size 1).
 
 ### Nota Bene: this network is slow relative to fcnetwork.py, as
 ### all calculations are performed element-wise rather than matrix-

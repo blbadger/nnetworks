@@ -122,7 +122,7 @@ model = tf.keras.models.Sequential([
 ### Compile model: choose loss and optimization functions
 
 model.compile(optimizer=tf.keras.optimizers.SGD(momentum=0.9, lr=0.01, decay=0.3), 
-	loss = 'categorical_crossentropy', 
+	loss = 'categorical_crossentropy', # labels are hot-encoded
 	metrics=['accuracy'])
 
 ### Displays details of each layer output in the model 

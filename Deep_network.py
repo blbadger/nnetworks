@@ -145,7 +145,7 @@ model = tf.keras.models.Sequential([
 ])
 
 model.compile(optimizer='Adam', 
-	loss = 'categorical_crossentropy', 
+	loss = 'categorical_crossentropy', # labels are hot-encoded
 	metrics=['accuracy'])
 
 model.summary()

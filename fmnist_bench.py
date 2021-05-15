@@ -11,6 +11,8 @@ AlexNet.py architectures are employed to classify fashion MNIST images.
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Conv2D, Flatten, Dropout, MaxPooling2D
+from tensorflow.keras import regularizers
+from tensorflow.keras import layers
 
 import numpy as np 
 import matplotlib.pyplot as plt 
@@ -156,9 +158,9 @@ def alexnet(train_images, train_labels, test_images, test_labels):
 
 	test_loss, test_acc = model.evaluate(test_images, test_labels, verbose=2)
 
-deep_model = superdeep_network(train_images, train_labels, test_images, test_labels)
+# deep_model = superdeep_network(train_images, train_labels, test_images, test_labels)
 
-# alexnet(train_images, train_labels, test_images, test_labels)
+alexnet(train_images, train_labels, test_images, test_labels)
 
 ### Creates a panel of images classified by the trained neural network.
 

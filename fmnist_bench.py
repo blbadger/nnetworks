@@ -96,7 +96,7 @@ def superdeep_network(train_images, train_labels, test_images, test_labels):
 
 	model.summary()
 
-	model.fit(train_images, train_labels, epochs=1, batch_size = 20, verbose=1)
+	model.fit(train_images, train_labels, epochs=10, batch_size = 20, verbose=1)
 
 	test_loss, test_acc = model.evaluate(test_images, test_labels, verbose=0)
 	return model
@@ -106,44 +106,44 @@ def alexnet(train_images, train_labels, test_images, test_labels):
 	# AlexNet model
 
 	model = tf.keras.models.Sequential([
-	    Conv2D(96, (11, 11), 
-	    	activation='relu', 
-	    	input_shape=(28, 28, 1), 
-	    	strides=(4,4), 
-	    	kernel_regularizer=regularizers.l2(0.0005)),
-	    MaxPooling2D(pool_size=(3,3), strides=(2,2)),
-	    layers.BatchNormalization(),
-	    Conv2D(256, 5, 
-	    	padding='same', 
-	    	activation='relu', 
-	    	kernel_regularizer=regularizers.l2(0.0005)),
-	    # MaxPooling2D(pool_size=(3,3), strides=(2,2)),
-	    layers.BatchNormalization(),
-	    Conv2D(384, 3, 
-	    	padding='same', 
-	    	activation='relu', 
-	    	kernel_regularizer=regularizers.l2(0.0005)),
-	    Conv2D(384, 3, 
-	    	padding='same', 
-	    	activation='relu', 
-	    	kernel_regularizer=regularizers.l2(0.0005)),
-	    Conv2D(256, 3, 
-	    	padding='same', 
-	    	activation='relu', 
-	    	kernel_regularizer=regularizers.l2(0.0005)),
-	    # MaxPooling2D(pool_size=(3,3), strides=(2,2)),
-	    Flatten(),
-	    Dropout(0.5),
-	    Dense(2048, 
-	    	activation='relu', 
-	    	kernel_regularizer=regularizers.l2(0.0005)),
-	    Dropout(0.5),
-	    Dense(2048, 
-	    	activation='relu', 
-	    	kernel_regularizer=regularizers.l2(0.0005)),
-	    Dense(10, 
-	    	activation='softmax', 
-	    	kernel_regularizer=regularizers.l2(0.0005))
+		Conv2D(96, (11, 11), 
+			activation='relu', 
+			input_shape=(28, 28, 1), 
+			strides=(4,4), 
+			kernel_regularizer=regularizers.l2(0.0005)),
+		MaxPooling2D(pool_size=(3,3), strides=(2,2)),
+		layers.BatchNormalization(),
+		Conv2D(256, 5, 
+			padding='same', 
+			activation='relu', 
+			kernel_regularizer=regularizers.l2(0.0005)),
+		# MaxPooling2D(pool_size=(3,3), strides=(2,2)),
+		layers.BatchNormalization(),
+		Conv2D(384, 3, 
+			padding='same', 
+			activation='relu', 
+			kernel_regularizer=regularizers.l2(0.0005)),
+		Conv2D(384, 3, 
+			padding='same', 
+			activation='relu', 
+			kernel_regularizer=regularizers.l2(0.0005)),
+		Conv2D(256, 3, 
+			padding='same', 
+			activation='relu', 
+			kernel_regularizer=regularizers.l2(0.0005)),
+		# MaxPooling2D(pool_size=(3,3), strides=(2,2)),
+		Flatten(),
+		Dropout(0.5),
+		Dense(2048, 
+			activation='relu', 
+			kernel_regularizer=regularizers.l2(0.0005)),
+		Dropout(0.5),
+		Dense(2048, 
+			activation='relu', 
+			kernel_regularizer=regularizers.l2(0.0005)),
+		Dense(10, 
+			activation='softmax', 
+			kernel_regularizer=regularizers.l2(0.0005))
 	])
 
 	### Compile model: choose loss and optimization functions
@@ -154,11 +154,11 @@ def alexnet(train_images, train_labels, test_images, test_labels):
 
 	model.summary()
 
-	model.fit(train_images, train_labels, epochs=20, batch_size = 20)
+	model.fit(train_images, train_labels, epochs=10, batch_size=20)
 
-	test_loss, test_acc = model.evaluate(test_images, test_labels, verbose=2)
+	test_loss, test_acc = model.evaluate(test_images, test_labels, verbose=1)
 
-# deep_model = superdeep_network(train_images, train_labels, test_images, test_labels)
+# superdeep_network(train_images, train_labels, test_images, test_labels)
 
 alexnet(train_images, train_labels, test_images, test_labels)
 
@@ -167,29 +167,34 @@ alexnet(train_images, train_labels, test_images, test_labels)
 image_batch, label_batch = test_images[:25], test_labels[:25]
 predictions = deep_model.predict(test_images[:25])
 
-def plot_image(image_batch, test_labels, predictions):
+def plot_image(image, prediction, true_label):
 	""" 
 	Returns a test image with a predicted class, prediction
 	confidence, and true class labels that are color coded for accuracy.
 	"""
-	plt.figure(figsize=(20,20))
-	for i in range(25):
-		ax = plt.subplot(5, 5, i+1)
-		plt.imshow(image_batch[i].reshape(28, 28), cmap='gray')
-		max_index = np.argmax(predictions[i])
-		predicted_label = class_names[np.argmax(predictions[i])]
-		if max_index == test_labels[i]:
-			color = 'green'
-		else:
-			color = 'red'
-		confidence = int(100 * round(predictions[i][max_index], 2))
-		plt.title(f"{confidence} % {predicted_label}, {class_names[test_labels[i]]}", color=color, fontsize=10)
-		plt.axis('off')
+	plt.grid(False)
+	plt.xticks([])
+	plt.yticks([])
+	plt.imshow(image.reshape(28, 28), cmap='gray')
+	max_index = np.argmax(prediction)
+	confidence = prediction[max_index]
+	predicted_label = class_names[max_index]
+	if max_index == true_label:
+		color = 'green'
+	else:
+		color = 'red'
+	confidence = int(100 * round(confidence, 2))
+	plt.xlabel(f"{confidence} % {predicted_label}, {class_names[true_label]}", color=color)
 
-	plt.show() 
+num_rows = 4
+num_cols = 3
+num_images = 24
 
-plot_image(image_batch, label_batch, predictions)
+plt.figure(figsize = (num_rows, num_cols))
 
+for i in range(num_images):
+  plt.subplot(num_rows, 2*num_cols, i+1)
+  plot_image(image_batch[i], predictions[i], test_labels[i])
 
-
+plt.show() 
 

@@ -1,12 +1,8 @@
 """
 Tensorflow_sequential_deep.py
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-Implementation of a Keras sequential neural network using a 
-Tensorflow backend, combined with modules to display pre- classified
-images before the network trains as well as a subset of test images
-with classification and % confidence for each image.  The latter script
-is optimized for binary classification but can be modified for more than
-two classes.
+Implementation of a Keras functional model-based neural network using a 
+Tensorflow backend, used for benchmarking the fashion MNIST dataset.
 """
 
 ### Libraries
@@ -46,7 +42,7 @@ test_images = test_images.reshape(test_image_number, img_dimensions[0], img_dime
 ### Neural network model: specifies the architecture using the functional Keras model:
 ### Conv2D(16, 3, padding='same', activation='relu' signifies a convolutional layers
 ### of 16 filters, a local receptive field of 3x3, padding such that the output dimensions
-### are equal to input dimension (ie 28x28 input --> 28x28 output), and activation
+### are equal to input dimension (ie 256x256 input --> 256x256 output), and activation
 ### function for the layer)
 
 # Note that convolutional layers, once instatiated, save the input/output dimension sizes: 
@@ -92,6 +88,25 @@ class DeepNetwork(Model):
 
 model = DeepNetwork()
 
+# loss_function = tf.keras.losses.CategoricalCrossentropy()
+# optimizer = tf.keras.optimizers.Adam()
+# train_loss = tf.keras.metrics.Mean(name='train_loss')
+# train_accuracy = tf.keras.metrics.CategoricalAccuracy(name='train_accuracy')
+
+# @tf.function
+# def train(images, labels):
+#     with tf.GradientTape() as tape:
+#         predictions = model(images, training=True)
+#         loss = loss_function(labels, predictions)
+#     gradients = tape.gradient(loss, model.trainable_variables)
+#     optimizer.apply_gradients(zip(gradients, model.trainable_variables))
+
+#     train_loss(loss)
+#     train_accuracy(labels, predictions)
+
+# train(train_images, train_labels)
+
+# # model.summary()
 model.compile(optimizer='Adam', 
     loss = 'sparse_categorical_crossentropy', # labels are hot-encoded
     metrics=['accuracy'])
@@ -104,34 +119,46 @@ model.evaluate(x_test1, y_test1, verbose=2)
 
 model.evaluate(x_test2, y_test2, verbose=2)
 
-predictions = model.predict(test_images)
 ### Creates a panel of images classified by the trained neural network.
 
-image_batch, label_batch = test_images[:25], test_labels[:25]
-predictions = deep_model.predict(test_images[:25])
+image_batch, label_batch = next(test_data_gen1)
 
-def plot_image(image_batch, test_labels, predictions):
-    """ 
-    Returns a test image with a predicted class, prediction
+test_images, test_labels = image_batch, label_batch
+
+predictions = model.predict(test_images)
+
+def plot_image(i, predictions, true_label, img):
+    """ returns a test image with a predicted class, prediction
     confidence, and true class labels that are color coded for accuracy.
     """
-    plt.figure(figsize=(20,20))
-    for i in range(25):
-        ax = plt.subplot(5, 5, i+1)
-        plt.imshow(image_batch[i].reshape(28, 28), cmap='gray')
-        max_index = np.argmax(predictions[i])
-        predicted_label = class_names[np.argmax(predictions[i])]
-        if max_index == test_labels[i]:
-            color = 'green'
-        else:
-            color = 'red'
-        confidence = int(100 * round(predictions[i][max_index], 2))
-        plt.title(f"{confidence} % {predicted_label}, {class_names[test_labels[i]]}", color=color, fontsize=10)
-        plt.axis('off')
+    prediction, true_label, img = predictions[i], true_label[i], img[i]
+    plt.grid(False)
+    plt.xticks([])
+    plt.yticks([])
+    plt.imshow(img)
+    predicted_label = np.argmax(predictions)
+    if prediction[0] >=0.5 and true_label[0]==1:
+        color = 'green'
+    elif prediction[0] <=0.5 and true_label[0]==0:
+        color = 'green'
+    else:
+        color = 'red'
+    plt.xlabel("{} % {}, {}".format(int(100*np.max(prediction)), 
+        'Snf7' if prediction[0]>=0.5 else 'Control', 
+        'Snf7' if true_label[0]==1. else 'Control'), color = color)
 
-    plt.show() 
 
-plot_image(image_batch, label_batch, predictions)
+num_rows = 4
+num_cols = 3
+num_images = 24
+
+plt.figure(figsize = (num_rows, num_cols))
+
+for i in range(num_images):
+  plt.subplot(num_rows, 2*num_cols, i+1)
+  plot_image(i+1, predictions, test_labels, test_images)
+
+plt.show() 
 
 
 

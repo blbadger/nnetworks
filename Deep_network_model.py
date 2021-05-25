@@ -113,40 +113,31 @@ model.compile(optimizer='Adam',
 
 model.fit(train_images, train_labels, epochs=9, batch_size = 20, verbose=2)
 
-### Evaluates neural network on test datasets and print the results
+test_loss, test_acc = model.evaluate(test_images, test_labels, verbose=1)
+print (f"Test loss: {test_loss}, \n Test Accuracy: {test_acc}")
 
-model.evaluate(x_test1, y_test1, verbose=2)
 
-model.evaluate(x_test2, y_test2, verbose=2)
+image_batch, label_batch = test_images[:25], test_labels[:25]
+predictions = deep_model.predict(test_images[:25])
 
-### Creates a panel of images classified by the trained neural network.
-
-image_batch, label_batch = next(test_data_gen1)
-
-test_images, test_labels = image_batch, label_batch
-
-predictions = model.predict(test_images)
-
-def plot_image(i, predictions, true_label, img):
-    """ returns a test image with a predicted class, prediction
+def plot_image(image, prediction, true_label):
+    """ 
+    Returns a test image with a predicted class, prediction
     confidence, and true class labels that are color coded for accuracy.
     """
-    prediction, true_label, img = predictions[i], true_label[i], img[i]
     plt.grid(False)
     plt.xticks([])
     plt.yticks([])
-    plt.imshow(img)
-    predicted_label = np.argmax(predictions)
-    if prediction[0] >=0.5 and true_label[0]==1:
-        color = 'green'
-    elif prediction[0] <=0.5 and true_label[0]==0:
+    plt.imshow(image.reshape(28, 28), cmap='gray')
+    max_index = np.argmax(prediction)
+    confidence = prediction[max_index]
+    predicted_label = class_names[max_index]
+    if max_index == true_label:
         color = 'green'
     else:
         color = 'red'
-    plt.xlabel("{} % {}, {}".format(int(100*np.max(prediction)), 
-        'Snf7' if prediction[0]>=0.5 else 'Control', 
-        'Snf7' if true_label[0]==1. else 'Control'), color = color)
-
+    confidence = int(100 * round(confidence, 2))
+    plt.xlabel(f"{confidence} % {predicted_label}, {class_names[true_label]}", color=color)
 
 num_rows = 4
 num_cols = 3
@@ -156,9 +147,10 @@ plt.figure(figsize = (num_rows, num_cols))
 
 for i in range(num_images):
   plt.subplot(num_rows, 2*num_cols, i+1)
-  plot_image(i+1, predictions, test_labels, test_images)
+  plot_image(image_batch[i], predictions[i], test_labels[i])
 
 plt.show() 
+
 
 
 

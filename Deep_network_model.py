@@ -1,5 +1,5 @@
 """
-Tensorflow_sequential_deep.py
+Deep_network_model.py
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Implementation of a Keras functional model-based neural network using a 
 Tensorflow backend, used for benchmarking the fashion MNIST dataset.

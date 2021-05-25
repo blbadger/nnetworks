@@ -1,5 +1,5 @@
 """
-Tensorflow_sequential_deep.py
+Deep_network.py
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Implementation of a Keras sequential neural network using a 
 Tensorflow backend, combined with modules to display pre- classified

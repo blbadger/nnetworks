@@ -1,4 +1,4 @@
-# neural-network
+# nnetworks
 
 A collection of neural networks for image classification.
 

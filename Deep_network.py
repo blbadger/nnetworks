@@ -30,9 +30,15 @@ AUTOTUNE = tf.data.experimental.AUTOTUNE
 ### Initialize datasets: all training and test dataset directories are assigned to variables. 
 ### Insert the correct directory for each desired dataset.
 
-data_dir = pathlib.Path('/home/bbadger/Desktop/neural_network_images',  fname='Combined')
-data_dir2 = pathlib.Path('/home/bbadger/Desktop/neural_network_images2', fname='Combined')
-data_dir3 = pathlib.Path('/home/bbadger/Desktop/neural_network_images3', fname='Combined')
+# Snap29 monochrome dataset
+data_dir = pathlib.Path('data/snap29_mono_train1',  fname='Combined')
+data_dir2 = pathlib.Path('data/snap29_mono_test1', fname='Combined')
+data_dir3 = pathlib.Path('data/snap29_mono_test2', fname='Combined') 
+
+# Snf7 dataset
+# data_dir = pathlib.Path('data/NN_snf7',  fname='Combined')
+# data_dir2 = pathlib.Path('data/NN_snf7_2', fname='Combined')
+# data_dir3 = pathlib.Path('data/NN_snf7_2', fname='Combined') # duplicate of above, as there is only one test dataset for Snf7
 
 ### Assigns the size of the dataset in data_dir to the variable image_count, which is then 
 ### used to determine the BATCH_SIZE argument for the image_generator.flow_from_directory() function.
@@ -43,7 +49,8 @@ image_count = len(list(data_dir.glob('*/*.png')))
 ### class name is determined by the name of the subfolder the image is located inside, eg all
 ### images inside documents/nn_images/control are labelled 'control', with phantom folders excluded.
 
-CLASS_NAMES = np.array([item.name for item in data_dir.glob('*') if item.name not in ['._.DS_Store', '._DS_Store', '.DS_Store']])
+CLASS_NAMES = np.array([item.name for item in data_dir.glob('*') 
+                        if item.name not in ['._.DS_Store', '._DS_Store', '.DS_Store']])
 
 print (CLASS_NAMES)
 
@@ -58,29 +65,28 @@ BATCH_SIZE = 400
 
 train_data_gen1 = image_generator.flow_from_directory(directory=str(data_dir),
 	batch_size=BATCH_SIZE, shuffle=True, target_size=(IMG_HEIGHT,IMG_WIDTH), 
-		classes=list(CLASS_NAMES), subset = 'training')
+	classes=list(CLASS_NAMES), subset = 'training')
 
-CLASS_NAMES = np.array([item.name for item in data_dir2.glob('*') if item.name not in ['._.DS_Store', '.DS_Store', '._DS_Store']])
-
+CLASS_NAMES = np.array([item.name for item in data_dir2.glob('*') 
+                        if item.name not in ['._.DS_Store', '.DS_Store', '._DS_Store']])
 print (CLASS_NAMES)
 
 test_data_gen1 = image_generator.flow_from_directory(directory=str(data_dir2), 
     batch_size=783, shuffle=True, target_size=(IMG_HEIGHT,IMG_WIDTH),
-        classes=list(CLASS_NAMES))
+    classes=list(CLASS_NAMES))
 
 
-CLASS_NAMES = np.array([item.name for item in data_dir3.glob('*') if item.name not in ['._.DS_Store', '.DS_Store', '._DS_Store']])
-
+CLASS_NAMES = np.array([item.name for item in data_dir3.glob('*') 
+                        if item.name not in ['._.DS_Store', '.DS_Store', '._DS_Store']])
 print (CLASS_NAMES)
 
 test_data_gen2 = image_generator.flow_from_directory(directory=str(data_dir3), 
     batch_size=719, shuffle=True, target_size=(IMG_HEIGHT,IMG_WIDTH),
-        classes=list(CLASS_NAMES))
+    classes=list(CLASS_NAMES))
 
 ##################################
 ### Optional: displays training or test dataset images with classificaiton labels.
-### Note that doing so affects the BATCH_SIZE variable, such that the maximum
-### batch size = image_count / 2
+### Note that doing so affects the BATCH_SIZE variable strangely
 
 def show_batch(image_batch, label_batch):
     """Takes a set of images (image_batch) and an array of labels (label_batch)
@@ -107,9 +113,7 @@ show_batch(image_batch, label_batch)
 ### generators
 
 (x_train, y_train) = next(train_data_gen1)
-
 (x_test1, y_test1) = next(test_data_gen1)
-
 (x_test2, y_test2) = next(test_data_gen2)
 
 ### Neural network model: specifies the architecture using the Sequential Keras model:
@@ -143,25 +147,20 @@ model = tf.keras.models.Sequential([
 ])
 
 model.compile(optimizer='Adam', 
-	loss = 'categorical_crossentropy', # labels are hot-encoded
+	loss = 'binary_crossentropy',
 	metrics=['accuracy'])
 
 model.summary()
 
-model.fit(x_train, y_train, epochs=9, batch_size = 20, verbose=2)
+model.fit(x_train, y_train, epochs=5, batch_size=20, verbose=1)
 
 ### Evaluates neural network on test datasets and print the results
-
 model.evaluate(x_test1, y_test1, verbose=2)
-
 model.evaluate(x_test2, y_test2, verbose=2)
 
 ### Creates a panel of images classified by the trained neural network.
-
 image_batch, label_batch = next(test_data_gen1)
-
 test_images, test_labels = image_batch, label_batch
-
 predictions = model.predict(test_images)
 
 def plot_image(i, predictions, true_label, img):

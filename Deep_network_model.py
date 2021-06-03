@@ -37,6 +37,7 @@ IMG_WIDTH = 28
 # reshape input data to match Conv2D input argument
 train_images = train_images.reshape(train_image_number, img_dimensions[0], img_dimensions[1], 1)
 test_images = test_images.reshape(test_image_number, img_dimensions[0], img_dimensions[1], 1)
+print (train_images[:1])
 
 
 ### Neural network model: specifies the architecture using the functional Keras model:
@@ -65,7 +66,6 @@ class DeepNetwork(Model):
         self.d2 = Dense(50, activation='relu')
         self.d3 = Dense(10, activation='softmax')
         
-
     def call(self, model_input):
         out = self.entry_conv(model_input)
         for _ in range(2):

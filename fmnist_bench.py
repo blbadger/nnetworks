@@ -74,16 +74,16 @@ def superdeep_network(train_images, train_labels, test_images, test_labels):
 		Conv2D(16, 3, padding='same', activation='relu'),
 		MaxPooling2D(),
 		Conv2D(32, 3, padding='same', activation='relu'),
+		# MaxPooling2D(),
+		Conv2D(32, 3, padding='same', activation='relu'),
+		Conv2D(32, 3, padding='same', activation='relu'),
+		# MaxPooling2D(),
+		Conv2D(64, 3, padding='same', activation='relu'),
+		# MaxPooling2D(),
+		Conv2D(64, 3, padding='same', activation='relu'),
+		# MaxPooling2D(),
+		Conv2D(64, 3, padding='same', activation='relu'),
 		MaxPooling2D(),
-		Conv2D(32, 3, padding='same', activation='relu'),
-		Conv2D(32, 3, padding='same', activation='relu'),
-		# MaxPooling2D(),
-		Conv2D(64, 3, padding='same', activation='relu'),
-		# MaxPooling2D(),
-		Conv2D(64, 3, padding='same', activation='relu'),
-		# MaxPooling2D(),
-		Conv2D(64, 3, padding='same', activation='relu'),
-		# MaxPooling2D(),
 		Flatten(),
 		Dense(512, activation='relu'),
 		Dense(50, activation='relu'),
@@ -96,7 +96,7 @@ def superdeep_network(train_images, train_labels, test_images, test_labels):
 
 	model.summary()
 
-	model.fit(train_images, train_labels, epochs=10, batch_size = 20, verbose=1)
+	model.fit(train_images, train_labels, epochs=9, batch_size = 10, verbose=1)
 
 	test_loss, test_acc = model.evaluate(test_images, test_labels, verbose=0)
 	return model
@@ -158,14 +158,15 @@ def alexnet(train_images, train_labels, test_images, test_labels):
 
 	test_loss, test_acc = model.evaluate(test_images, test_labels, verbose=1)
 
-# superdeep_network(train_images, train_labels, test_images, test_labels)
+model = superdeep_network(train_images, train_labels, test_images, test_labels)
 
-alexnet(train_images, train_labels, test_images, test_labels)
+# alexnet(train_images, train_labels, test_images, test_labels)
 
 ### Creates a panel of images classified by the trained neural network.
 
+
 image_batch, label_batch = test_images[:25], test_labels[:25]
-predictions = deep_model.predict(test_images[:25])
+predictions = model.predict(test_images[:25])
 
 def plot_image(image, prediction, true_label):
 	""" 

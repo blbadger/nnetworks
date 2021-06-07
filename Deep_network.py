@@ -104,8 +104,8 @@ def show_batch(image_batch, label_batch):
 
 ### calls show_batch on a preprocessed dataset to view classified images
 
-image_batch, label_batch = next(train_data_gen1)
-show_batch(image_batch, label_batch)
+# image_batch, label_batch = next(train_data_gen1)
+# show_batch(image_batch, label_batch)
 
 ###################################
 
@@ -151,12 +151,20 @@ model.compile(optimizer='Adam',
 	metrics=['accuracy'])
 
 model.summary()
+model.save_weights('model_init')
+accuracies = []
 
-model.fit(x_train, y_train, epochs=5, batch_size=20, verbose=1)
+for i in range(10):
+    model.load_weights('model_init')
+    model.fit(x_train, y_train, epochs=9, batch_size=20, verbose=0)
 
-### Evaluates neural network on test datasets and print the results
-model.evaluate(x_test1, y_test1, verbose=2)
-model.evaluate(x_test2, y_test2, verbose=2)
+    ### Evaluates neural network on test datasets and print the results
+    string1 = model.evaluate(x_test1, y_test1, verbose=2)
+    string2 = model.evaluate(x_test2, y_test2, verbose=2)
+    accuracies.append(string1[1])
+    accuracies.append(string2[1])
+
+print (accuracies)
 
 ### Creates a panel of images classified by the trained neural network.
 image_batch, label_batch = next(test_data_gen1)

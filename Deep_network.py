@@ -31,9 +31,9 @@ AUTOTUNE = tf.data.experimental.AUTOTUNE
 ### Insert the correct directory for each desired dataset.
 
 # Snap29 monochrome dataset
-data_dir = pathlib.Path('data/snap29_mono_train1',  fname='Combined')
-data_dir2 = pathlib.Path('data/snap29_mono_test1', fname='Combined')
-data_dir3 = pathlib.Path('data/snap29_mono_test2', fname='Combined') 
+data_dir = pathlib.Path('data/snap29_mono_test2',  fname='Combined')
+data_dir2 = pathlib.Path('data/snap29_mono_train1', fname='Combined')
+data_dir3 = pathlib.Path('data/snap29_mono_test1', fname='Combined') 
 
 # Snf7 dataset
 # data_dir = pathlib.Path('data/NN_snf7',  fname='Combined')
@@ -104,8 +104,8 @@ def show_batch(image_batch, label_batch):
 
 ### calls show_batch on a preprocessed dataset to view classified images
 
-# image_batch, label_batch = next(train_data_gen1)
-# show_batch(image_batch, label_batch)
+image_batch, label_batch = next(train_data_gen1)
+show_batch(image_batch, label_batch)
 
 ###################################
 
@@ -156,7 +156,7 @@ accuracies = []
 
 for i in range(10):
     model.load_weights('model_init')
-    model.fit(x_train, y_train, epochs=9, batch_size=20, verbose=0)
+    model.fit(x_train, y_train, epochs=9, batch_size=20, verbose=1)
 
     ### Evaluates neural network on test datasets and print the results
     string1 = model.evaluate(x_test1, y_test1, verbose=2)

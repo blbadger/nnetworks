@@ -31,9 +31,9 @@ AUTOTUNE = tf.data.experimental.AUTOTUNE
 ### Insert the correct directory for each desired dataset.
 
 # Snap29 monochrome dataset
-data_dir = pathlib.Path('data/snap29_mono_test2',  fname='Combined')
-data_dir2 = pathlib.Path('data/snap29_mono_train1', fname='Combined')
-data_dir3 = pathlib.Path('data/snap29_mono_test1', fname='Combined') 
+data_dir = pathlib.Path('data/snap29_mono_train1',  fname='Combined')
+data_dir2 = pathlib.Path('data/snap29_mono_test1', fname='Combined')
+data_dir3 = pathlib.Path('data/snap29_mono_test2', fname='Combined')
 
 # Snf7 dataset
 # data_dir = pathlib.Path('data/NN_snf7',  fname='Combined')
@@ -67,13 +67,13 @@ train_data_gen1 = image_generator.flow_from_directory(directory=str(data_dir),
 	batch_size=BATCH_SIZE, shuffle=True, target_size=(IMG_HEIGHT,IMG_WIDTH), 
 	classes=list(CLASS_NAMES), subset = 'training')
 
-CLASS_NAMES = np.array([item.name for item in data_dir2.glob('*') 
-                        if item.name not in ['._.DS_Store', '.DS_Store', '._DS_Store']])
+CLASS_NAMES = [item.name for item in data_dir2.glob('*') 
+                        if item.name not in ['._.DS_Store', '.DS_Store', '._DS_Store']]
 print (CLASS_NAMES)
 
 test_data_gen1 = image_generator.flow_from_directory(directory=str(data_dir2), 
     batch_size=783, shuffle=True, target_size=(IMG_HEIGHT,IMG_WIDTH),
-    classes=list(CLASS_NAMES))
+    classes=CLASS_NAMES)
 
 
 CLASS_NAMES = np.array([item.name for item in data_dir3.glob('*') 
@@ -151,20 +151,18 @@ model.compile(optimizer='Adam',
 	metrics=['accuracy'])
 
 model.summary()
-model.save_weights('model_init')
-accuracies = []
 
-for i in range(10):
-    model.load_weights('model_init')
-    model.fit(x_train, y_train, epochs=9, batch_size=20, verbose=1)
+# model.load_weights('model_init')
+model.fit(x_train, y_train, epochs=9, batch_size=20, verbose=1)
 
-    ### Evaluates neural network on test datasets and print the results
-    string1 = model.evaluate(x_test1, y_test1, verbose=2)
-    string2 = model.evaluate(x_test2, y_test2, verbose=2)
-    accuracies.append(string1[1])
-    accuracies.append(string2[1])
+### Evaluates neural network on test datasets and print the results
+string1 = model.evaluate(x_test1, y_test1, verbose=2)
+string2 = model.evaluate(x_test2, y_test2, verbose=2)
+accuracies.append(string1[1])
+accuracies.append(string2[1])
+model.save_weights('model_final')
 
-print (accuracies)
+
 
 ### Creates a panel of images classified by the trained neural network.
 image_batch, label_batch = next(test_data_gen1)

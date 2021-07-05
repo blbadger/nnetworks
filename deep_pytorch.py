@@ -44,7 +44,7 @@ class ImageDataset(Dataset):
 		# construct image name list: randomly sample 400 images for each epoch
 		images = list(img_dir.glob('*/*.png'))
 		random.shuffle(images)
-		self.image_name_ls = images[:400]
+		self.image_name_ls = images[:800]
 
 		self.img_dir = img_dir
 		self.transform = transform
@@ -72,7 +72,7 @@ class ImageDataset(Dataset):
 		return image, label_tens
 
 # specify batch size
-batch_size = 20
+batch_size = 10
 
 train_data = ImageDataset(data_dir)
 test_data = ImageDataset(data_dir2)
@@ -102,7 +102,7 @@ class DeepNetwork(nn.Module):
 		self.relu = nn.ReLU()
 		self.softmax = nn.Softmax(dim=1)
 
-		self.d1 = nn.Linear(64, 512)
+		self.d1 = nn.Linear(8192, 512)
 		self.d2 = nn.Linear(512, 50)
 		self.d3 = nn.Linear(50, 2)
 		
@@ -117,15 +117,15 @@ class DeepNetwork(nn.Module):
 
 		out = self.relu(self.conv32(out))
 		out = self.max_pooling(out)
-		out = self.relu(self.conv32_2(out))
-		out = self.relu(self.conv32_2(out))
-		out = self.max_pooling(out)
-		out = self.relu(self.conv64(out))
-		out = self.max_pooling(out)
-		out = self.relu(self.conv64_2(out))
-		out = self.max_pooling(out)
-		out = self.relu(self.conv64_2(out))
-		out = self.max_pooling(out)
+		# out = self.relu(self.conv32_2(out))
+		# out = self.relu(self.conv32_2(out))
+		# out = self.max_pooling(out)
+		# out = self.relu(self.conv64(out))
+		# out = self.max_pooling(out)
+		# out = self.relu(self.conv64_2(out))
+		# out = self.max_pooling(out)
+		# out = self.relu(self.conv64_2(out))
+		# out = self.max_pooling(out)
 		output = torch.flatten(out, 1, 3)
 
 		output = self.d1(output)
@@ -142,7 +142,7 @@ loss_fn = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters())
 
 def train(dataloader, model, loss_fn, optimizer):
-	size = 20
+	size = 10
 	model.train()
 	count = 0
 	total_loss = 0
@@ -161,6 +161,7 @@ def train(dataloader, model, loss_fn, optimizer):
 		optimizer.step()
 		# print (f"Minibatch loss: {loss}")
 
+	print (pred)
 	ave_loss = float(total_loss) / count
 	elapsed_time = time.time() - start
 	print (f"Average Loss: {ave_loss:.04}")
@@ -181,7 +182,7 @@ def test(dataloader, model):
 	print (f"Test accuracy: {int(correct)} / {size}")
 	model.train()
 
-epochs = 20
+epochs = 30
 for e in range(epochs):
 	print (f"Epoch {e+1} \n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 	train(train_dataloader, model, loss_fn, optimizer)

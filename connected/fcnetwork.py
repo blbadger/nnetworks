@@ -10,6 +10,9 @@
 import random
 import numpy as np 
 
+# Nielsen's mnist dataset loader
+import mnist_loader
+
 class FullNetwork:
 
 	def __init__(self, architecture, activation_function):
@@ -56,7 +59,6 @@ class FullNetwork:
 
 	def network_output(self, output):
 		# Feed-forward network output
-
 		for index in range(self.item_length-1):
 			weight, bias = self.weights[index], self.biases[index]
 			output = self.activation_function(np.dot(weight.T, output) + bias)
@@ -133,7 +135,7 @@ class FullNetwork:
 		self.biases = [b - lr*db for b, db in zip(self.biases, partial_db)]
 
 
-import mnist_loader
+
 
 training_data, validation_data, test_data = mnist_loader.load_data_wrapper()
 

@@ -35,76 +35,73 @@ class Network{
 	vector<vector<vector<float>>> weights;
 
 	 // initialize biases
-	public: vector<vector<float>> biases_init(){
-		for (int i=0; i < network_length-1; i++){
-			vector<float> temp;
-			for (int j=0; j < architecture[i]; j++){
-				  //obtain number from normal distribution
-				float val = random_sample(0, 1); 
-				temp.push_back(val);
-			}
-			biases.push_back(temp);
-		}
-		return biases;
-	}
-	
-	//public:
-	public: void print_biases(){
-		cout << biases.size();
-		for (auto u: biases){
-			for (auto v: u){
-				cout << v;
-			}
-		}
-	}
-	
-	 //initialize weights
-	vector<vector<vector<float>>> weights_init(){
-		for (int i=0; i < network_length-1; i++){
-			vector<vector<float>> layer;
-			for (int j=0; j < architecture[i]; j++){
+	public: 
+		void biases_init(){
+			for (int i=0; i < network_length-1; i++){
 				vector<float> temp;
-				for (int k=0; k < architecture[i]; k++){
-					val = distro(gen);
+				for (int j=0; j < architecture[i]; j++){
+					 //obtain number from normal distribution
+					float val = random_sample(0, 1); 
 					temp.push_back(val);
 				}
-				layer.push_back(temp);
+				biases.push_back(temp);
 			}
-			weights.push_back(layer);
+			return;
 		}
-		return weights;
-	}
-	vector<vector<float>> biases = biases_init();
-	vector<vector<vector<float>>> weights = weights_init();
 	
-	//public:
-	void print_weights(){
-		for (auto u: weights){
-			for (auto v: u){
-				for (auto q:v){
-					cout << q;
+		//void print_biases(){
+			//cout << biases.size();
+			//for (auto u: biases){
+				//for (auto v: u){
+					//cout << v;
+				//}
+			//}
+		//}
+	
+	 //initialize weights
+		void weights_init(){
+			for (int i=0; i < network_length-1; i++){
+				vector<vector<float>> layer;
+				for (int j=0; j < architecture[i]; j++){
+					vector<float> temp;
+					for (int k=0; k < architecture[i]; k++){
+						float val = random_sample(0, 1);
+						temp.push_back(val);
+					}
+					layer.push_back(temp);
 				}
+				weights.push_back(layer);
 			}
+			return;
 		}
-	}
+	
+		//void print_weights(){
+			//for (auto u: weights){
+				//for (auto v: u){
+					//for (auto q:v){
+						//cout << q;
+					//}
+				//}
+			//}
+		//}
 	
 	float activation_function(float z){
 		float sigmoid_z = 1 / (1+pow(2.7828, -z));
 		return sigmoid_z;
-	}
+	};
 	
 	float activation_prime(float z){
 		float sigmoid_prime_z = activation_function(z) * (1 - activation_function(z));
 		return sigmoid_prime_z;
-	}
+	};
 	
 	float cost_function_derivative(float output_activations, float y){
-		return output_activations - y
-	}
+		return output_activations - y;
+	};
 	
 	
 	vector<float> network_output(vector<float> input_arr){
-		feed forward output from neural network from reformatted input
+		//feed forward output from neural network from reformatted input
 		vector<float> z_matrix;
 		
 		for (int i=0; i < network_length-1; i++){
@@ -130,10 +127,9 @@ class Network{
 
 //train the network 
 int main() {
-	float s = random_sample(0, 1);
 	Network connected_net;
 	connected_net.biases_init();
-	connected_net.print_biases();
+	connected_net.weights_init();
 	//connected_net.print_weights();
 	//connected_net.gradient_descent(10, 50, 0.1);
 	return 0;

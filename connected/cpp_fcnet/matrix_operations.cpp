@@ -3,8 +3,24 @@
 #include <iostream>
 #include <vector>
 #include <cmath>
+#include <random>
 
 using namespace std;
+
+float random_sample(float mean, float stdev){
+	std::random_device rd; 
+    std::mt19937 gen(rd()); 
+    
+    float sample;
+	// instance of class std::normal_distribution with specific mean and stddev
+	normal_distribution<float> distro(mean, stdev); 
+
+	// get random number with normal distribution using gen as random source
+	sample = distro(gen); 
+	
+	return sample;
+};
+
 
 vector<vector<float>> matmult(vector<vector<float>> mat1, 
 							vector<vector<float>> mat2) {
@@ -25,7 +41,7 @@ vector<vector<float>> matmult(vector<vector<float>> mat1,
 		res.push_back(temp);
 	}
 	return res;
-	};
+};
 
 
 vector<vector<float>> transpose(vector<vector<float>> arr) {
@@ -39,7 +55,7 @@ vector<vector<float>> transpose(vector<vector<float>> arr) {
 			temp.push_back(0.);
 		}
 		res.push_back(temp);
-	}
+};
 	
 	for (int i=0; i < rows; i++){
 		for (int j=0; j < cols; j++){
@@ -48,22 +64,49 @@ vector<vector<float>> transpose(vector<vector<float>> arr) {
 		}
 		
 	return res;
-	};
+};
 
 vector<float> sigmoid(vector<float> arr) {
 	for (int i=0; i < arr.size(); i++){
 		arr[i] = 1 / (1 + std::pow(2.7828, -arr[i]));
 		}
 	return arr;
-	};
+};
 	
 
 vector<float> scalar_mult(vector<float> arr, float scalar){
 	vector<float> res;
-	return res;
+	for (int i=0; i < arr.size(); i++){
+		res.push_back(arr[i] * scalar);
 	}
+	return res;
+};
+
+vector<float> scalar_add(vector<float> arr, float scalar){
+	vector<float> res;
+	for (int i=0; i < arr.size(); i++){
+		res.push_back(arr[i] + scalar);
+	}
+	return res;
+};
+	
+vector<float> hadamard(vector<float> arr1, vector<float> arr2){
+	vector<float> res;
+	if (arr1.size() != arr2.size()){
+		 cout << "Error: arr1 and arr2 not same size";
+		 return res;
+	}
+	
+	for (int i=0; i < arr1.size(); i++){
+		res.push_back(arr1[i] * arr2[i]);
+	}
+	
+	return res;
+};
 
 
+
+/*
 int main(){
 	 //standard definition: mxn matrix has m rows and n columns
 	vector<vector<float>>  mat1 = {{ 1., 3., 5.},
@@ -83,4 +126,4 @@ int main(){
 	}
 	return 0;
 }
-
+*/

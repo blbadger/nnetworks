@@ -54,6 +54,7 @@ class FullNetwork:
 			return np.where(z > 0, 0, 1)
 
 		if self.activation == 'sigmoid':
+			print (z.shape)
 			return self.activation_function(z)*(1 - self.activation_function(z))
 
 

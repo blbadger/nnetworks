@@ -21,7 +21,6 @@ float random_sample(float mean, float stdev){
 	return sample;
 };
 
-
 vector<vector<float>> matmult(vector<vector<float>> mat1, 
 							vector<vector<float>> mat2) {
 	vector<vector<float>> res;
@@ -66,6 +65,16 @@ vector<vector<float>> transpose(vector<vector<float>> arr) {
 	return res;
 };
 
+vector<float> transpose_row(vector<float> arr){
+	vector<float> res;
+	int size = arr.size();
+	for (int i=0; i < size; i++){
+		vector<float> ele = {arr[i]};
+		res.insert(arr.end(), ele.begin(), ele.end());
+		}
+	return res;
+	}
+
 vector<float> sigmoid(vector<float> arr) {
 	for (int i=0; i < arr.size(); i++){
 		arr[i] = 1 / (1 + std::pow(2.7828, -arr[i]));
@@ -104,19 +113,33 @@ vector<float> hadamard(vector<float> arr1, vector<float> arr2){
 	return res;
 };
 
-
+//vector<vector<float>> mat_add(vector<vector<float>> arr1, vector<vector<float>> arr2){
+	//vector<vector<float>> res;
+	//if (arr1.size() != arr2.size()){
+		 //cout << "Error: arr1 and arr2 not same size";
+		 //return res;
+	//}
+	
+	//for (int i=0; i < arr1.size(); i++){
+		//vector<int> temp;
+		//for (int j=0; j < arr1[0].size(); j++){
+			//temp.push_back(arr1[i][j] + arr2[i][j]);
+		//}
+		//res.insert(res.end(), temp.begin(), temp.end());
+	//}
+	
+	//return res;
+//}
 
 /*
 int main(){
 	 //standard definition: mxn matrix has m rows and n columns
-	vector<vector<float>>  mat1 = {{ 1., 3., 5.},
-								 { 2., 4., 6.}};  
+	vector<vector<float>>  mat1 = {{ 1., 3., 5.}};  
 								 
-	vector<vector<float>> mat2 = {{ 1. , 4., 3.}, 
-								{ 0. , 5., 1.}, 
-								{ 17., 6., 11.}}; 
-	vector<vector<int>> res;
-	mat2 = transpose(mat2);
+	vector<vector<float>> mat2 = {{ 1.}, 
+								{ 0. }, 
+								{ 17.}}; 
+	vector<vector<float>> res;
 	res = matmult(mat1, mat2);
 	for (int i=0; i < res.size(); i++){
 		for (int j=0; j < res[0].size(); j++){
@@ -127,3 +150,4 @@ int main(){
 	return 0;
 }
 */
+

@@ -75,9 +75,11 @@ vector<float> transpose_row(vector<float> arr){
 	return res;
 	}
 
-vector<float> sigmoid(vector<float> arr) {
+vector<vector<float>> sigmoid(vector<vector<float>> arr) {
 	for (int i=0; i < arr.size(); i++){
-		arr[i] = 1 / (1 + std::pow(2.7828, -arr[i]));
+		for (int j=0; j < arr[0].size(); j++){
+			arr[i][j] = 1 / (1 + std::pow(2.7828, -arr[i][j]));
+			}
 		}
 	return arr;
 };
@@ -113,23 +115,19 @@ vector<float> hadamard(vector<float> arr1, vector<float> arr2){
 	return res;
 };
 
-//vector<vector<float>> mat_add(vector<vector<float>> arr1, vector<vector<float>> arr2){
-	//vector<vector<float>> res;
-	//if (arr1.size() != arr2.size()){
-		 //cout << "Error: arr1 and arr2 not same size";
-		 //return res;
-	//}
+vector<vector<float>> matadd(vector<vector<float>> arr1, vector<vector<float>> arr2){
+	vector<vector<float>> res;
 	
-	//for (int i=0; i < arr1.size(); i++){
-		//vector<int> temp;
-		//for (int j=0; j < arr1[0].size(); j++){
-			//temp.push_back(arr1[i][j] + arr2[i][j]);
-		//}
-		//res.insert(res.end(), temp.begin(), temp.end());
-	//}
+	for (int i=0; i < arr1.size(); i++){
+		vector<float> temp;
+		for (int j=0; j < arr1[0].size(); j++){
+			temp.push_back(arr1[i][j] + arr2[i][j]);
+		}
+		res.push_back(temp);
+	}
 	
-	//return res;
-//}
+	return res;
+}
 
 /*
 int main(){
@@ -141,6 +139,7 @@ int main(){
 								{ 17.}}; 
 	vector<vector<float>> res;
 	res = matmult(mat1, mat2);
+	//res = matadd(mat1, transpose(mat2));
 	for (int i=0; i < res.size(); i++){
 		for (int j=0; j < res[0].size(); j++){
 			cout << res[i][j] << " ";
@@ -150,4 +149,5 @@ int main(){
 	return 0;
 }
 */
+
 

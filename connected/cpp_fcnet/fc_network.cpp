@@ -111,10 +111,16 @@ class Network{
 
 		//return output
 	
-	vector<float> network_output(input){
-		
+	vector<float> network_output(vector<float> output){
+		for (int i=0; i < architecture.size(); i++){
+			vector<float> weight_arr = weights[i];
+			vector<float> biases_arr = biases[i];
+			vector<float> z_vec = matmult(transpose(weight_arr), output);
+			vector<float> activations = mat_add(z_vec, biases_arr)
+			output = activation_function(activations);
+			}
+			return output;
 		}
-	
 	
 	//vector<float> network_output(vector<float> input_arr){
 		//feed forward output from neural network from reformatted input

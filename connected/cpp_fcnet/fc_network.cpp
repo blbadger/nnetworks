@@ -86,10 +86,11 @@ class Network{
 			//}
 		//}
 	
-	vector<float> activation_function(vector<float> z_array){
-		vector<float> sigmoid_arr = sigmoid(z_array); // from matrix_operations.cpp
-		return sigmoid_arr;
-	};
+	vector<vector<float>> activation_function(vector<vector<float>> z_array){
+			vector<vector<float>> sigmoid_arr = sigmoid(z_array); 
+			return sigmoid_arr;
+		};
+
 
 	vector<float> activation_prime(vector<float> z){
 		vector<float> neg_z = scalar_mult(z, -1);
@@ -97,30 +98,30 @@ class Network{
 		return sigmoid_prime_z;
 	};
 
-	// TODO: check cost function derivative and translate network output function
 	float cost_function_derivative(float output_activations, float y){
 		return output_activations - y;
 	};
 	
-	//def network_output(self, output):
-		//# Feed-forward network output
-
-		//for index in range(self.item_length-1):
-			//weight, bias = self.weights[index], self.biases[index]
-			//output = self.activation_function(np.dot(weight.T, output) + bias)
-
-		//return output
 	
-	vector<float> network_output(vector<float> output){
-		for (int i=0; i < architecture.size(); i++){
-			vector<float> weight_arr = weights[i];
-			vector<float> biases_arr = biases[i];
-			vector<float> z_vec = matmult(transpose(weight_arr), output);
-			vector<float> activations = mat_add(z_vec, biases_arr)
+	vector<vector<float>> network_output(vector<vector<float>> output){
+		for (int i=0; i < architecture.size() - 1; i++){
+			vector<vector<float>> weight_arr = weights[i];
+			vector<vector<float>> biases_arr = biases[i];
+			vector<vector<float>> transposed_output = transpose(output);
+			//for (int i=0; i < transposed_output.size(); i++){
+				//for (int j=0; j < transposed_output[i].size(); j++){
+					//cout << transposed_output[i][j] << " ";
+				//}
+				//cout << "\n";
+			//}
+
+			vector<vector<float>> z_vec = matmult(weight_arr, transposed_output);
+			vector<vector<float>> activations = matadd(transpose(z_vec), biases_arr);
 			output = activation_function(activations);
-			}
-			return output;
+			
 		}
+		return output;
+	}
 	
 	//vector<float> network_output(vector<float> input_arr){
 		//feed forward output from neural network from reformatted input

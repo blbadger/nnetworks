@@ -31,6 +31,7 @@ class FullNetwork:
 			j = architecture[i]
 			k = architecture[i-1]
 			self.weights.append(np.random.randn(k, j))
+		print (len(self.weights[0][0]))
 
 		self.item_length = len(architecture)
 

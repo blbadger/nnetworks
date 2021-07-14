@@ -32,7 +32,7 @@ float random_sample(float mean, float stdev){
 class Network{
 	vector<int> architecture = {784, 20, 10};
 	int network_length = architecture.size();
-	vector<vector<float>> biases;
+	vector<vector<vector<float>>> biases;
 	vector<vector<vector<float>>> weights;
 
 	 // initialize biases
@@ -40,12 +40,14 @@ class Network{
 		void biases_init(){
 			for (int i=0; i < network_length-1; i++){
 				vector<float> temp;
+				vector<vector<float>> temp2;
 				for (int j=0; j < architecture[i]; j++){
 					 //obtain number from normal distribution
 					float val = random_sample(0, 1); 
 					temp.push_back(val);
 				}
-				biases.push_back(temp);
+				temp2.push_back(temp);
+				biases.push_back(temp2);
 			}
 			return;
 		}
@@ -92,9 +94,10 @@ class Network{
 		};
 
 
-	vector<float> activation_prime(vector<float> z){
-		vector<float> neg_z = scalar_mult(z, -1);
-		vector<float> sigmoid_prime_z = hadamard(activation_function(z), scalar_add(neg_z, 1));
+	vector<vector<float>> activation_prime(vector<vector<float>> z){
+		vector<vector<float>> neg_z = scalar_mult(z, -1);
+		
+		vector<vector<float>> sigmoid_prime_z = hadamard(activation_function(z), scalar_add(neg_z, 1));
 		return sigmoid_prime_z;
 	};
 
@@ -117,6 +120,7 @@ class Network{
 
 			vector<vector<float>> z_vec = matmult(weight_arr, transposed_output);
 			vector<vector<float>> activations = matadd(transpose(z_vec), biases_arr);
+			
 			output = activation_function(activations);
 			
 		}

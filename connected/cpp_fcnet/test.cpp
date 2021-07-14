@@ -7,8 +7,9 @@ using namespace std;
 
 vector<float> architecture = {3, 2};
 vector<vector<vector<float>>> weights = {{{3, 2, 4}, 
-										  {2, 1, 4}}};
-vector<vector<vector<float>>> biases = {{{2, -1}}};
+										  {2, 1, 0}}};
+										  
+vector<vector<vector<float>>> biases = {{{2, 0}}};
 
 vector<vector<float>> activation_function(vector<vector<float>> z_array){
 		vector<vector<float>> sigmoid_arr = sigmoid(z_array); 
@@ -29,6 +30,12 @@ vector<vector<float>> network_output(vector<vector<float>> output){
 
 		vector<vector<float>> z_vec = matmult(weight_arr, transposed_output);
 		vector<vector<float>> activations = matadd(transpose(z_vec), biases_arr);
+		for (int i=0; i < activations.size(); i++){
+			for (int j=0; j < activations[i].size(); j++){
+				cout << activations[i][j] << " ";
+			}
+			cout << "\n";
+		}
 		output = activation_function(activations);
 		
 	}
@@ -36,9 +43,10 @@ vector<vector<float>> network_output(vector<vector<float>> output){
 }
 	
 int main(){
-	vector<vector<float>> output = {{1, 2, 3}};
+	vector<vector<float>> output = {{1, 0.4, -1}};
 	vector<vector<float>> fin;
-    fin = network_output(output);
+    //fin = network_output(output);
+    fin = scalar_mult(output, 2);
 	for (int i=0; i < fin.size(); i++){
 			for (int j=0; j < fin[i].size(); j++){
 				cout << fin[i][j] << " ";

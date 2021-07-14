@@ -7,20 +7,6 @@
 
 using namespace std;
 
-float random_sample(float mean, float stdev){
-	std::random_device rd; 
-    std::mt19937 gen(rd()); 
-    
-    float sample;
-	// instance of class std::normal_distribution with specific mean and stddev
-	normal_distribution<float> distro(mean, stdev); 
-
-	// get random number with normal distribution using gen as random source
-	sample = distro(gen); 
-	
-	return sample;
-};
-
 vector<vector<float>> matmult(vector<vector<float>> mat1, 
 							vector<vector<float>> mat2) {
 	vector<vector<float>> res;
@@ -78,38 +64,48 @@ vector<float> transpose_row(vector<float> arr){
 vector<vector<float>> sigmoid(vector<vector<float>> arr) {
 	for (int i=0; i < arr.size(); i++){
 		for (int j=0; j < arr[0].size(); j++){
-			arr[i][j] = 1 / (1 + std::pow(2.7828, -arr[i][j]));
+			arr[i][j] = 1. / (1. + std::pow(2.7828, -arr[i][j]));
 			}
 		}
 	return arr;
 };
 	
 
-vector<float> scalar_mult(vector<float> arr, float scalar){
-	vector<float> res;
+vector<vector<float>> scalar_mult(vector<vector<float>> arr, float scalar){
+	vector<vector<float>> res;
 	for (int i=0; i < arr.size(); i++){
-		res.push_back(arr[i] * scalar);
+		vector<float> temp;
+		for (int j=0; j < arr[0].size(); j++){
+			temp.push_back(arr[i][j] * scalar);
+		}
+		res.push_back(temp);
 	}
 	return res;
 };
 
-vector<float> scalar_add(vector<float> arr, float scalar){
+vector<vector<float>> scalar_add(vector<vector<float>> arr, float scalar){
 	vector<float> res;
 	for (int i=0; i < arr.size(); i++){
-		res.push_back(arr[i] + scalar);
+		for (int j=0; j < arr.size(); j++){
+			arr[i][j] = arr[i][j] + scalar;
+		}
 	}
-	return res;
+	return arr;
 };
 	
-vector<float> hadamard(vector<float> arr1, vector<float> arr2){
-	vector<float> res;
-	if (arr1.size() != arr2.size()){
+vector<vector<float>> hadamard(vector<vector<float>> arr1, vector<vector<float>> arr2){
+	vector<vector<float>> res;
+	if (arr1.size() != arr2.size() or arr1[0].size() != arr2[0].size()){
 		 cout << "Error: arr1 and arr2 not same size";
 		 return res;
 	}
 	
 	for (int i=0; i < arr1.size(); i++){
-		res.push_back(arr1[i] * arr2[i]);
+		vector<float> temp;
+		for (int j=0; j < arr1[0].size(); j++){
+			temp.push_back(arr1[i][j] * arr2[i][j]);
+		}
+		res.push_back(temp);
 	}
 	
 	return res;

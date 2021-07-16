@@ -127,26 +127,34 @@ class Network{
 		return output;
 	}
 	
-	//vector<float> network_output(vector<float> input_arr){
-		//feed forward output from neural network from reformatted input
-		//vector<float> z_matrix;
+	void backpropegate(vector<vector<float>> output, vector<vector<float>> classification){
+		vector<vector<vector<float>>> activations_arr;
+		vector<vector<vector<float>>> z_vectors;
 		
-		//for (int i=0; i < network_length-1; i++){
-			//float weight = weights[i];
-			//float bias = biases[i];
-			//vector<float> total_ls = [0]*bias.size();
-			//for (int j=0; j < weight.size(); j++){
-				//float w_vec = weight[j];
-				//for (int k=0; k < w_vec.size(); k++){
-					//total_ls += w_vec[k] * input_arr[j];
-				//}
-			//}
+		for (int i=0; i < architecture.size() - 1; i++){
+			vector<vector<float>> weight_arr = weights[i];
+			vector<vector<float>> biases_arr = biases[i];
+			vector<vector<float>> transposed_output = transpose(output);
+
+			vector<vector<float>> z_vec = matmult(weight_arr, transposed_output);
+			vector<vector<float>> activations = matadd(transpose(z_vec), biases_arr);
 			
-		//}
+			output = activation_function(activations);
+			activations_arr.push_back(output);
+			z_vectors.push_back(activations);
+		}
 		
-		//return z_matrix;
-	//};
-	
+		// compute output error
+		vector<vector<float>> error = cost_function_derivative(activations_arr[activations_arr.size()-1], classification) \
+		 * activation_prime(z_vectors[z_vectors.size()-1]);
+		 
+		// initialize partial derivative arrays
+		vector<vector<vector<float>>> dc_db;
+		vector<vector<vector<float>>> dc_dw;
+		// TODO: backprop
+
+	}
+
 
 };
 

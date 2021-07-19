@@ -44,13 +44,20 @@ vector<vector<float>> network_output(vector<vector<float>> output){
 	
 int main(){
 	vector<vector<float>> output = {{1, 0.4, -1}};
-	vector<vector<float>> fin;
+	weights.push_back(output);
+	vector<vector<vector<float>>> fin = weights;
+	//cout << fin[1][0][2];
+	cout << fin[0][0].size();
+	
     //fin = network_output(output);
-    fin = scalar_mult(output, 2);
-	for (int i=0; i < fin.size(); i++){
-			for (int j=0; j < fin[i].size(); j++){
-				cout << fin[i][j] << " ";
-			}
-			cout << "\n";
-		}
+    //fin = scalar_mult(output, 2);
+	//for (int i=0; i < fin.size(); i++){
+		//for (int j=0; j < fin[i].size(); j++){
+			//for (int k=0; i < fin[i][j].size(); k++) {
+				//cout << i << j << k << " ";
+			//}
+		//}
+			//cout << "\n";
+	//}
+	return 0;
 }

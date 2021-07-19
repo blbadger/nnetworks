@@ -151,7 +151,19 @@ class Network{
 		// initialize partial derivative arrays
 		vector<vector<vector<float>>> dc_db;
 		vector<vector<vector<float>>> dc_dw;
-		// TODO: backprop
+		
+		// Partial derivatives of the last layer wrt error
+		dc_db.push_back(error)
+		dc_dw.push_back(matmult(error, transpose(activations[activations.size()-2]));
+		
+		
+		// backpropegate
+		for (int i=2; i < architecture.size(); i++){
+			
+		}
+		
+		// TODO: gradient descent;
+
 
 	}
 

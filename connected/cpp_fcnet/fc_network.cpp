@@ -34,6 +34,7 @@ class Network{
 	int network_length = architecture.size();
 	vector<vector<vector<float>>> biases;
 	vector<vector<vector<float>>> weights;
+	float learning_rate = 0.01;
 
 	 // initialize biases
 	public: 
@@ -158,15 +159,37 @@ class Network{
 		
 		
 		// backpropegate
-		for (int i=2; i < architecture.size(); i++){
+		for (int i=architecture.size() - 1; i > 0; i--){
+			vector<vector<float>> activation = activation_function(z_vec[i]);
+			vector<vector<float>> error = matmult(weights[i], error) * activation;
 			
+			//update partial derivatives with error
+			dc_db.push_back(error);
+			dc_dw.push_back(matmult(error, transpose(activations[i - 1]);
 		}
 		
-		// TODO: gradient descent;
-
-
-	}
-
+		// update weights and biases with gradient
+		
+		dc_db = reverse(dc_db);
+		dc_dw = reverse(dc_dw);
+	
+		// gradient descent
+		float lr = learning_rate;
+		for (int i=0; i < weights.size(); i++){
+			for (int j=0; j < weights[i].size(); j++){
+				for (int k=0; k < weights[i][j].size(); k++){
+					weights[i][j][k] = weights[i][j][k] - lr * dw_db[i][j][k];
+				}
+			}
+		}
+		
+		for (int i=0; i < biases.size(); i++){
+			for (int j=0; j < biases[i].size(); j++){
+				for (int k=0; k < biases[i][j].size(); k++){
+					biases[i][j][k] = biases[i][j][k] - lr * dc_db[i][j][k];
+				}
+			}
+		}
 
 };
 

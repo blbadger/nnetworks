@@ -125,16 +125,29 @@ vector<vector<float>> matadd(vector<vector<float>> arr1, vector<vector<float>> a
 	return res;
 }
 
-/*
+vector<vector<float>> reverse(vector<vector<float>> arr){
+	int start = 0;
+	int end = arr.size() - 1;
+	while (start < end){
+		vector<float> temp = arr[start];
+		arr[start] = arr[end];
+		arr[end] = temp;
+		start++;
+		end--;
+	}
+	return arr;	
+}
+
+
 int main(){
 	 //standard definition: mxn matrix has m rows and n columns
-	vector<vector<float>>  mat1 = {{ 1., 3., 5.}};  
+	vector<vector<float>>  mat1 = {{ 1., 3., 5.}, {3., 4., 1.}};  
 								 
 	vector<vector<float>> mat2 = {{ 1.}, 
 								{ 0. }, 
 								{ 17.}}; 
 	vector<vector<float>> res;
-	res = matmult(mat1, mat2);
+	res = reverse(mat1);
 	//res = matadd(mat1, transpose(mat2));
 	for (int i=0; i < res.size(); i++){
 		for (int j=0; j < res[0].size(); j++){
@@ -144,6 +157,5 @@ int main(){
 	}
 	return 0;
 }
-*/
 
 

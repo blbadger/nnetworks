@@ -138,10 +138,11 @@ vector<vector<float>> reverse(vector<vector<float>> arr){
 	return arr;	
 }
 
-
+/*
 int main(){
 	 //standard definition: mxn matrix has m rows and n columns
-	vector<vector<float>>  mat1 = {{ 1., 3., 5.}, {3., 4., 1.}};  
+	vector<vector<float>>  mat1 = {{ 1., 3., 5.}, 
+								   {3., 4., 1.}};  
 								 
 	vector<vector<float>> mat2 = {{ 1.}, 
 								{ 0. }, 
@@ -158,4 +159,4 @@ int main(){
 	return 0;
 }
 
-
+*/

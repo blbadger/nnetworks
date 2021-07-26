@@ -31,7 +31,6 @@ class FullNetwork:
 			j = architecture[i]
 			k = architecture[i-1]
 			self.weights.append(np.random.randn(k, j))
-		print (len(self.weights[0][0]))
 
 		self.item_length = len(architecture)
 
@@ -141,6 +140,8 @@ class FullNetwork:
 training_data, validation_data, test_data = mnist_loader.load_data_wrapper()
 
 net = FullNetwork([784, 20, 10], activation_function='sigmoid')
+
+print (net.biases)
 
 net.gradient_descent(training_data, 20, 0.1, bootstrap=False) # data, epochs, learning_rate, bootstrap
 

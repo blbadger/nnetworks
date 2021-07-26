@@ -111,17 +111,18 @@ class Network{
 		for (int i=0; i < architecture.size() - 1; i++){
 			vector<vector<float>> weight_arr = weights[i];
 			vector<vector<float>> biases_arr = biases[i];
-			vector<vector<float>> transposed_output = transpose(output);
-			//for (int i=0; i < transposed_output.size(); i++){
-				//for (int j=0; j < transposed_output[i].size(); j++){
-					//cout << transposed_output[i][j] << " ";
+			vector<vector<float>> transposed_weight = transpose(weight_arr);
+			
+			//for (int i=0; i < transposed_weight.size(); i++){
+				//for (int j=0; j < transposed_weight[i].size(); j++){
+					//cout << transposed_weight[i][j] << " ";
 				//}
 				//cout << "\n";
 			//}
 
-			vector<vector<float>> z_vec = matmult(weight_arr, transposed_output);
-			vector<vector<float>> activations = matadd(transpose(z_vec), biases_arr);
+			vector<vector<float>> z_vec = matmult(weight_arr, output);
 			
+			vector<vector<float>> activations = matadd(z_vec, biases_arr);
 			output = activation_function(activations);
 			
 		}
@@ -137,8 +138,8 @@ class Network{
 			vector<vector<float>> biases_arr = biases[i];
 			vector<vector<float>> transposed_output = transpose(output);
 
-			vector<vector<float>> z_vec = matmult(weight_arr, transposed_output);
-			vector<vector<float>> activations = matadd(transpose(z_vec), biases_arr);
+			vector<vector<float>> z_vec = matmult(weight_arr, output);
+			vector<vector<float>> activations = matadd(z_vec, biases_arr);
 			
 			output = activation_function(activations);
 			activations_arr.push_back(output);

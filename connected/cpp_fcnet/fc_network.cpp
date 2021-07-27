@@ -62,13 +62,13 @@ class Network{
 			//}
 		//}
 	
-	 //initialize weights
+		//initialize weights
 		void weights_init(){
-			for (int i=0; i < network_length-1; i++){
+			for (int i=1; i < network_length; i++){
 				vector<vector<float>> layer;
 				for (int j=0; j < architecture[i]; j++){
 					vector<float> temp;
-					for (int k=0; k < architecture[i]; k++){
+					for (int k=0; k < architecture[i-1]; k++){
 						float val = random_sample(0, 1);
 						temp.push_back(val);
 					}
@@ -136,7 +136,7 @@ class Network{
 		for (int i=0; i < architecture.size() - 1; i++){
 			vector<vector<float>> weight_arr = weights[i];
 			vector<vector<float>> biases_arr = biases[i];
-			vector<vector<float>> transposed_output = transpose(output);
+			vector<vector<float>> transposed_weight= transpose(weight_arr);
 
 			vector<vector<float>> z_vec = matmult(weight_arr, output);
 			vector<vector<float>> activations = matadd(z_vec, biases_arr);

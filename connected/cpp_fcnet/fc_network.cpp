@@ -102,10 +102,10 @@ class Network{
 		return sigmoid_prime_z;
 	};
 
-	float cost_function_derivative(float output_activations, float y){
-		return output_activations - y;
+	vector<vector<float>> cost_function_derivative(vector<vector<float>> output_activations, vector<vector<float>> y){
+		vector<vector<float>> neg_y = scalar_mult(y, -1);
+		return matadd(output_activations, neg_y);
 	};
-	
 	
 	vector<vector<float>> network_output(vector<vector<float>> output){
 		for (int i=0; i < architecture.size() - 1; i++){

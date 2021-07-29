@@ -53,7 +53,7 @@ vector<vector<float>> network_output(vector<vector<float>> output){
 	return output;
 }
 
-void backpropegate(vector<vector<float>> output, vector<vector<float>> classification){
+vector<vector<vector<float>>> backpropegate(vector<vector<float>> output, vector<vector<float>> classification){
 		vector<vector<vector<float>>> activations_arr;
 		
 		for (int i=0; i < architecture.size() - 1; i++){
@@ -68,8 +68,24 @@ void backpropegate(vector<vector<float>> output, vector<vector<float>> classific
 			activations_arr.push_back(output);
 			z_vectors.push_back(activations);
 		}
-		return;
+		return activations_arr;
 	}
+	
+
+vector<vector<float>> activation_prime(vector<vector<float>> z){
+	vector<vector<float>> neg_z = scalar_mult(z, -1);
+	vector<vector<float>> zac = activation_function(z);
+	vector<vector<float>> negz = scalar_mult(z, -1);
+	vector<vector<float>> res = hadamard(zac, scalar_add(negz, 1));
+	return res;
+};
+
+
+vector<vector<float>> cost_function_derivative(vector<vector<float>> output_activations, vector<vector<float>> y){
+	vector<vector<float>> neg_y = scalar_mult(y, -1);
+	vector<vector<float>> res = matadd(output_activations, neg_y);
+	return res;
+};
 	
 int main(){
 	vector<vector<float>> output = {{1},
@@ -77,7 +93,12 @@ int main(){
 									{-1}};
 								
 	vector<vector<float>> classification = {{0., 1.}};						
-	backpropegate(output, classification);
+	vector<vector<vector<float>>> activations_arr = backpropegate(output, classification);
+	
+	
+	vector<vector<float>> error = hadamard(cost_function_derivative(activations_arr[activations_arr.size()-1], classification) \
+		 , activation_prime(z_vectors[z_vectors.size()-1]));
+		 
 	vector<vector<vector<float>>> fin = z_vectors;
 	
 

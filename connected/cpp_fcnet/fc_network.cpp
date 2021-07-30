@@ -147,9 +147,12 @@ class Network{
 		}
 		
 		// compute output error
-		vector<vector<float>> error = cost_function_derivative(activations_arr[activations_arr.size()-1], classification) \
-		 * activation_prime(z_vectors[z_vectors.size()-1]);
-		 
+		vector<vector<vector<float>>> activations_arr = backpropegate(output, classification);
+		vector<vector<float>> last_acts = activations_arr[activations_arr.size()-1];
+		
+		vector<vector<float>> last_prime = activation_prime(last_acts);
+		vector<vector<float>> error = hadamard(cost_function_derivative(last_acts, classification), last_prime);
+		
 		// initialize partial derivative arrays
 		vector<vector<vector<float>>> dc_db;
 		vector<vector<vector<float>>> dc_dw;

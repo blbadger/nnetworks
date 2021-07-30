@@ -63,7 +63,7 @@ vector<float> transpose_row(vector<float> arr){
 
 vector<vector<float>> sigmoid(vector<vector<float>> arr) {
 	for (int i=0; i < arr.size(); i++){
-		for (int j=0; j < arr[0].size(); j++){
+		for (int j=0; j < arr[i].size(); j++){
 			arr[i][j] = 1. / (1. + std::pow(2.7828, -arr[i][j]));
 			}
 		}
@@ -86,7 +86,7 @@ vector<vector<float>> scalar_mult(vector<vector<float>> arr, float scalar){
 vector<vector<float>> scalar_add(vector<vector<float>> arr, float scalar){
 	vector<float> res;
 	for (int i=0; i < arr.size(); i++){
-		for (int j=0; j < arr.size(); j++){
+		for (int j=0; j < arr[i].size(); j++){
 			arr[i][j] = arr[i][j] + scalar;
 		}
 	}

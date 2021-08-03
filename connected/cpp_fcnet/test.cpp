@@ -99,26 +99,56 @@ int main(){
 	vector<vector<float>> last_prime = activation_prime(last_acts);
 	vector<vector<float>> error = hadamard(cost_function_derivative(last_acts, classification), last_prime);
 	
-	vector<vector<float>> transposed_weight = error;
-	for (int i=0; i < transposed_weight.size(); i++){
-			for (int j=0; j < transposed_weight[i].size(); j++){
-				cout << transposed_weight[i][j] << " ";
-			}
-			cout << "\n";
-		}
 	
-		 
-	vector<vector<vector<float>>> fin = z_vectors;
-	
+	// initialize partial derivative arrays
+	vector<vector<vector<float>>> dc_db;
+	vector<vector<vector<float>>> dc_dw;
+		
+	// Partial derivatives of the last layer wrt error
+	dc_db.push_back(error);
+	dc_dw.push_back(matmult(error, transpose(activations_arr[activations_arr.size()-2])));
 
-	for (int i=0; i < fin.size(); i++){
-		for (int j=0; j < fin[i].size(); j++){
-			for (int k=0; k < fin[i][j].size(); k++){
-				cout << fin[i][j][k];
+		 
+	// backpropegate
+	for (int i=architecture.size() - 2; i >= 1; i--){
+		vector<vector<float>> activation = activation_function(z_vectors[i]);
+		vector<vector<float>> w_err = matmult(weights[i], error);
+		
+		vector<vector<float>> fin = w_err;
+		
+		for (int i=0; i < fin.size(); i++){
+			for (int j=0; j < fin[i].size(); j++){
+				cout << fin[i][j];
 			}
 			cout << " ";
 		}
-		cout << "\n";
+		
+		vector<vector<float>> error =  hadamard(w_err, activation);
+		
+		//update partial derivatives with error
+		dc_db.push_back(error);
+		
+		
+		//for (int i=0; i < fin.size(); i++){
+			//for (int j=0; j < fin[i].size(); j++){
+				//cout << fin[i][j];
+			//}
+		//}
+		
+		dc_dw.push_back(matmult(error, transpose(activations_arr[i - 1])));
 	}
+		
+	vector<vector<vector<float>>> fin = dc_dw;
+
+	//for (int i=0; i < fin.size(); i++){
+		//for (int j=0; j < fin[i].size(); j++){
+			//for (int k=0; k < fin[i][j].size(); k++){
+				//cout << fin[i][j][k];
+			//}
+			//cout << "\n";
+		//}
+		//cout << "\n" << "\n";
+	//}
+	
 	return 0;
 }

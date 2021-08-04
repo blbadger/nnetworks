@@ -7,18 +7,17 @@
 
 using namespace std;
 
-vector<vector<float>> matmult(vector<vector<float>> mat1, 
-							vector<vector<float>> mat2) {
+vector<vector<float>> matmult(vector<vector<float>> mat1, vector<vector<float>> mat2) {
 	vector<vector<float>> res;
 	if (mat1[0].size() != mat2.size()){
 		cout << "Matrix size error: mat1 row length /= mat2 col length";
 		return res;
 	}
-	for (unsigned int k=0; k < mat1.size(); k++){
+	for (int k=0; k < mat1.size(); k++){
 		vector<float> temp;
-		for (unsigned int i=0; i < mat2[0].size(); i++){
-			int sum = 0;
-			for (unsigned int j=0; j < mat2.size(); j++){
+		for (int i=0; i < mat2[0].size(); i++){
+			float sum = 0;
+			for (int j=0; j < mat2.size(); j++){
 				sum += mat1[k][j] * mat2[j][i];
 			}
 			temp.push_back(sum);
@@ -125,11 +124,11 @@ vector<vector<float>> matadd(vector<vector<float>> arr1, vector<vector<float>> a
 	return res;
 }
 
-vector<vector<float>> reverse(vector<vector<float>> arr){
+vector<vector<vector<float>>> reverse(vector<vector<vector<float>>> arr){
 	int start = 0;
 	int end = arr.size() - 1;
 	while (start < end){
-		vector<float> temp = arr[start];
+		vector<vector<float>> temp = arr[start];
 		arr[start] = arr[end];
 		arr[end] = temp;
 		start++;

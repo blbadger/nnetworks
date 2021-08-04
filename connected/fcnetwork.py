@@ -110,7 +110,8 @@ class FullNetwork:
 		dc_db = []
 		dc_dw = []
 		dc_db.append(error)
-		print (dc_db)
+		print (error.shape)
+		print (np.dot(error, activations[-2].T).shape)
 		dc_dw.append(np.dot(error, activations[-2].T))
 
 		# backpropegate to previous layers

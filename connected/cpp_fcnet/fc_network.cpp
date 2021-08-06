@@ -158,7 +158,7 @@ class Network{
 		vector<vector<vector<float>>> dc_dw;
 		
 		// Partial derivatives of the last layer wrt error
-		dc_db.push_back(error)
+		dc_db.push_back(error);
 		dc_dw.push_back(matmult(error, transpose(activations[activations.size()-2]));
 		
 		
@@ -174,25 +174,74 @@ class Network{
 		
 		// update weights and biases with gradient
 		
-		dc_db = reverse(dc_db);
+		// initialize partial derivative arrays
+		vector<vector<vector<float>>> dc_db;
+		vector<vector<vector<float>>> dc_dw;
+			
+		// Partial derivatives of the last layer wrt error
+		dc_db.push_back(error);
+		dc_dw.push_back(matmult(error, transpose(activations_arr[activations_arr.size()-2])));
+		
+		//vector<vector<float>> f =  transpose(activations_arr[activations_arr.size()-2]);
+		
+			//cout << "[";
+			//for (int i=0; i < f.size(); i++){
+				//cout << "[";
+				//for (int j=0; j < f[i].size(); j++){
+					//cout << f[i][j] << " ";
+				//}
+				//cout << "]";
+				//cout << "\n";
+			//}
+			//cout << "]";
+			 
+		// backpropegate
+		for (int i=architecture.size() - 2; i > 0 ; i--){
+			vector<vector<float>> activation = activation_function(z_vectors[i]);
+			vector<vector<float>> w_err = matmult(weights[i], error);
+			
+			vector<vector<float>> error =  hadamard(w_err, activation);
+			
+			//update partial derivatives with error
+			dc_db.push_back(error);
+			dc_dw.push_back(matmult(error, transpose(activations_arr[i - 1])));
+		}
+		
+		// update weights and biases
+		vector<vector<vector<float>>> partial_db = reverse(dc_db);
 		dc_dw = reverse(dc_dw);
-	
+		vector<vector<vector<float>>> partial_dw;
+		
+		for (int i=0; i < dc_dw.size(); i++){
+			partial_dw.push_back(dc_dw[i]);
+		}
+		
+
 		// gradient descent
 		float lr = learning_rate;
+		
+		// TODO: weights[0] is 2x3 but partial_dw[0] is 2x2
+		
 		for (int i=0; i < weights.size(); i++){
-			for (int j=0; j < weights[i].size(); j++){
-				for (int k=0; k < weights[i][j].size(); k++){
-					weights[i][j][k] = weights[i][j][k] - lr * dw_db[i][j][k];
-				}
-			}
+			vector<vector<float>> direction = scalar_mult(scalar_mult(partial_dw[i], lr), -1);
+			weights[i] = matadd(weights[i], direction);
 		}
 		
 		for (int i=0; i < biases.size(); i++){
-			for (int j=0; j < biases[i].size(); j++){
-				for (int k=0; k < biases[i][j].size(); k++){
-					biases[i][j][k] = biases[i][j][k] - lr * dc_db[i][j][k];
+			vector<vector<float>> direction = scalar_mult(scalar_mult(partial_db[i], lr), -1);
+			biases[i] = matadd(biases[i], direction);
+		}
+			
+		vector<vector<vector<float>>> fin = weights;
+
+		for (int i=0; i < fin.size(); i++){
+			for (int j=0; j < fin[i].size(); j++){
+				for (int k=0; k < fin[i][j].size(); k++){
+					cout << fin[i][j][k] << " ";
 				}
+				cout << "\n";
 			}
+			cout << "\n" << "\n";
 		}
 
 };

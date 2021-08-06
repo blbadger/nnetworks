@@ -55,11 +55,12 @@ vector<vector<float>> network_output(vector<vector<float>> output){
 
 vector<vector<vector<float>>> backpropegate(vector<vector<float>> output, vector<vector<float>> classification){
 	vector<vector<vector<float>>> activations_arr;
+	activations_arr.push_back(output);
 	
 	for (int i=1; i < architecture.size(); i++){
 		vector<vector<float>> weight_arr = weights[i-1];
 		vector<vector<float>> biases_arr = biases[i-1];
-		vector<vector<float>> transposed_weight= transpose(weight_arr);
+		vector<vector<float>> transposed_weight= transpose(weight_arr); // 3x2 arr
 
 		vector<vector<float>> z_vec = matmult(weight_arr, output);
 		vector<vector<float>> activations = matadd(z_vec, biases_arr);
@@ -67,7 +68,7 @@ vector<vector<vector<float>>> backpropegate(vector<vector<float>> output, vector
 		output = activation_function(activations);
 		activations_arr.push_back(output);
 			
-		z_vectors.push_back(activations);
+		z_vectors.push_back(z_vec);
 	}
 
 	return activations_arr;
@@ -96,6 +97,7 @@ int main(){
 								
 	vector<vector<float>> classification = {{0.}, {1.}};						
 	vector<vector<vector<float>>> activations_arr = backpropegate(output, classification);
+	
 	vector<vector<float>> last_acts = activations_arr[activations_arr.size()-1];
 	
 	vector<vector<float>> last_prime = activation_prime(last_acts);
@@ -109,6 +111,7 @@ int main(){
 	// Partial derivatives of the last layer wrt error
 	dc_db.push_back(error);
 	dc_dw.push_back(matmult(error, transpose(activations_arr[activations_arr.size()-2])));
+	
 	//vector<vector<float>> f =  transpose(activations_arr[activations_arr.size()-2]);
 	
 		//cout << "[";
@@ -121,21 +124,9 @@ int main(){
 			//cout << "\n";
 		//}
 		//cout << "]";
-	
-	//vector<vector<vector<float>>> fin = dc_dw;
-	
-	//for (int i=0; i < fin.size(); i++){
-		//for (int j=0; j < fin[i].size(); j++){
-			//for (int k=0; k < fin[i][j].size(); k++){
-				//cout << fin[i][j][k];
-			//}
-			//cout << "\n";
-		//}
-		//cout << "\n" << "\n";
-	//}
 		 
 	// backpropegate
-	for (int i=architecture.size() - 2; i >= 1; i--){
+	for (int i=architecture.size() - 2; i > 0 ; i--){
 		vector<vector<float>> activation = activation_function(z_vectors[i]);
 		vector<vector<float>> w_err = matmult(weights[i], error);
 		
@@ -152,9 +143,10 @@ int main(){
 	vector<vector<vector<float>>> partial_dw;
 	
 	for (int i=0; i < dc_dw.size(); i++){
-		partial_dw.push_back(transpose(dc_dw[i]));
+		partial_dw.push_back(dc_dw[i]);
 	}
 	
+
 	// gradient descent
 	float lr = learning_rate;
 	
@@ -170,17 +162,19 @@ int main(){
 		biases[i] = matadd(biases[i], direction);
 	}
 		
-	//vector<vector<vector<float>>> fin = weights;
+	vector<vector<vector<float>>> fin = weights;
 
-	//for (int i=0; i < fin.size(); i++){
-		//for (int j=0; j < fin[i].size(); j++){
-			//for (int k=0; k < fin[i][j].size(); k++){
-				//cout << fin[i][j][k] << " ";
-			//}
-			//cout << "\n";
-		//}
-		//cout << "\n" << "\n";
-	//}
+	for (int i=0; i < fin.size(); i++){
+		for (int j=0; j < fin[i].size(); j++){
+			for (int k=0; k < fin[i][j].size(); k++){
+				cout << fin[i][j][k] << " ";
+			}
+			cout << "\n";
+		}
+		cout << "\n" << "\n";
+	}
+
+	
 	
 	return 0;
 }

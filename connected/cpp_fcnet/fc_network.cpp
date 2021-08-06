@@ -29,11 +29,26 @@ float random_sample(float mean, float stdev){
 	return sample;
 };
 
+
 class Network{
-	vector<int> architecture = {784, 20, 10};
+	vector<float> architecture = {3, 2, 2};
+	
+	vector<vector<vector<float>>> weights = {{{3, 2, 4}, 
+										  {2, 1, 0}},
+										 {{-1, 2},
+										  {0.5, 1}}};
+										  
+	vector<vector<vector<float>>> biases = {{{2},
+											 {0}},
+											{{1},
+											 {-1}}};
+											 
 	int network_length = architecture.size();
-	vector<vector<vector<float>>> biases;
-	vector<vector<vector<float>>> weights;
+	
+	//vector<vector<vector<float>>> biases;
+	//vector<vector<vector<float>>> weights;
+	vector<vector<vector<float>>> z_vectors;	
+	
 	float learning_rate = 0.01;
 
 	 // initialize biases
@@ -108,6 +123,7 @@ class Network{
 	};
 	
 	vector<vector<float>> network_output(vector<vector<float>> output){
+		
 		for (int i=0; i < architecture.size() - 1; i++){
 			vector<vector<float>> weight_arr = weights[i];
 			vector<vector<float>> biases_arr = biases[i];
@@ -129,25 +145,31 @@ class Network{
 		return output;
 	}
 	
-	void backpropegate(vector<vector<float>> output, vector<vector<float>> classification){
+	vector<vector<vector<float>>> forward(vector<vector<float>> output, vector<vector<float>> classification){
 		vector<vector<vector<float>>> activations_arr;
-		vector<vector<vector<float>>> z_vectors;
+		activations_arr.push_back(output);
 		
-		for (int i=0; i < architecture.size() - 1; i++){
-			vector<vector<float>> weight_arr = weights[i];
-			vector<vector<float>> biases_arr = biases[i];
-			vector<vector<float>> transposed_weight= transpose(weight_arr);
+		for (int i=1; i < architecture.size(); i++){
+			vector<vector<float>> weight_arr = weights[i-1];
+			vector<vector<float>> biases_arr = biases[i-1];
+			vector<vector<float>> transposed_weight= transpose(weight_arr); // 3x2 arr
 
 			vector<vector<float>> z_vec = matmult(weight_arr, output);
 			vector<vector<float>> activations = matadd(z_vec, biases_arr);
 			
 			output = activation_function(activations);
 			activations_arr.push_back(output);
-			z_vectors.push_back(activations);
+				
+			z_vectors.push_back(z_vec);
 		}
+
+		return activations_arr;
+	}
+	
+	void backpropegate(vector<vector<float>> output, vector<vector<float>> classification){
 		
 		// compute output error
-		vector<vector<vector<float>>> activations_arr = backpropegate(output, classification);
+		vector<vector<vector<float>>> activations_arr = forward(output, classification);
 		vector<vector<float>> last_acts = activations_arr[activations_arr.size()-1];
 		
 		vector<vector<float>> last_prime = activation_prime(last_acts);
@@ -156,46 +178,12 @@ class Network{
 		// initialize partial derivative arrays
 		vector<vector<vector<float>>> dc_db;
 		vector<vector<vector<float>>> dc_dw;
-		
-		// Partial derivatives of the last layer wrt error
-		dc_db.push_back(error);
-		dc_dw.push_back(matmult(error, transpose(activations[activations.size()-2]));
-		
-		
-		// backpropegate
-		for (int i=architecture.size() - 1; i > 0; i--){
-			vector<vector<float>> activation = activation_function(z_vec[i]);
-			vector<vector<float>> error = matmult(weights[i], error) * activation;
-			
-			//update partial derivatives with error
-			dc_db.push_back(error);
-			dc_dw.push_back(matmult(error, transpose(activations[i - 1]);
-		}
-		
-		// update weights and biases with gradient
-		
-		// initialize partial derivative arrays
-		vector<vector<vector<float>>> dc_db;
-		vector<vector<vector<float>>> dc_dw;
 			
 		// Partial derivatives of the last layer wrt error
 		dc_db.push_back(error);
 		dc_dw.push_back(matmult(error, transpose(activations_arr[activations_arr.size()-2])));
-		
-		//vector<vector<float>> f =  transpose(activations_arr[activations_arr.size()-2]);
-		
-			//cout << "[";
-			//for (int i=0; i < f.size(); i++){
-				//cout << "[";
-				//for (int j=0; j < f[i].size(); j++){
-					//cout << f[i][j] << " ";
-				//}
-				//cout << "]";
-				//cout << "\n";
-			//}
-			//cout << "]";
 			 
-		// backpropegate
+		// backpropegate error
 		for (int i=architecture.size() - 2; i > 0 ; i--){
 			vector<vector<float>> activation = activation_function(z_vectors[i]);
 			vector<vector<float>> w_err = matmult(weights[i], error);
@@ -207,7 +195,7 @@ class Network{
 			dc_dw.push_back(matmult(error, transpose(activations_arr[i - 1])));
 		}
 		
-		// update weights and biases
+		// compile array of partial derivatives
 		vector<vector<vector<float>>> partial_db = reverse(dc_db);
 		dc_dw = reverse(dc_dw);
 		vector<vector<vector<float>>> partial_dw;
@@ -215,12 +203,9 @@ class Network{
 		for (int i=0; i < dc_dw.size(); i++){
 			partial_dw.push_back(dc_dw[i]);
 		}
-		
 
-		// gradient descent
+		// gradient descent: update weights and biases
 		float lr = learning_rate;
-		
-		// TODO: weights[0] is 2x3 but partial_dw[0] is 2x2
 		
 		for (int i=0; i < weights.size(); i++){
 			vector<vector<float>> direction = scalar_mult(scalar_mult(partial_dw[i], lr), -1);
@@ -243,19 +228,30 @@ class Network{
 			}
 			cout << "\n" << "\n";
 		}
+	}
 
 };
 
 
 //train the network 
 int main() {
+	float learning_rate = 0.1;
+	
+	vector<vector<float>> output = {{1},
+									{0},
+									{-1}};
+								
+	vector<vector<float>> classification = {{0.}, {1.}};	
+	
 	Network connected_net;
-	connected_net.biases_init();
-	connected_net.weights_init();
+	//connected_net.biases_init();
+	//connected_net.weights_init();
 	//connected_net.print_weights();
-	//connected_net.gradient_descent(10, 50, 0.1);
+	connected_net.backpropegate(output, classification);
+	
 	return 0;
-	}
+}
+
 
 
 

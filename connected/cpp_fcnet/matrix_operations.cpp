@@ -111,6 +111,11 @@ vector<vector<float>> hadamard(vector<vector<float>> arr1, vector<vector<float>>
 };
 
 vector<vector<float>> matadd(vector<vector<float>> arr1, vector<vector<float>> arr2){
+	
+	if (arr1.size() != arr2.size() or arr1[0].size() != arr2[0].size()){
+		 cout << "Error: arr1 and arr2 not same size";
+	}
+	
 	vector<vector<float>> res;
 	
 	for (int i=0; i < arr1.size(); i++){

@@ -53,7 +53,7 @@ vector<vector<float>> network_output(vector<vector<float>> output){
 	return output;
 }
 
-vector<vector<vector<float>>> backpropegate(vector<vector<float>> output, vector<vector<float>> classification){
+vector<vector<vector<float>>> forward(vector<vector<float>> output, vector<vector<float>> classification){
 	vector<vector<vector<float>>> activations_arr;
 	activations_arr.push_back(output);
 	
@@ -96,7 +96,7 @@ int main(){
 									{-1}};
 								
 	vector<vector<float>> classification = {{0.}, {1.}};						
-	vector<vector<vector<float>>> activations_arr = backpropegate(output, classification);
+	vector<vector<vector<float>>> activations_arr = forward(output, classification);
 	
 	vector<vector<float>> last_acts = activations_arr[activations_arr.size()-1];
 	
@@ -150,7 +150,17 @@ int main(){
 	// gradient descent
 	float lr = learning_rate;
 	
-	// TODO: weights[0] is 2x3 but partial_dw[0] is 2x2
+	vector<vector<vector<float>>> fin1 = weights;
+
+	for (int i=0; i < fin1.size(); i++){
+		for (int j=0; j < fin1[i].size(); j++){
+			for (int k=0; k < fin1[i][j].size(); k++){
+				cout << fin1[i][j][k] << " ";
+			}
+			cout << "\n";
+		}
+		cout << "\n" << "\n";
+	}
 	
 	for (int i=0; i < weights.size(); i++){
 		vector<vector<float>> direction = scalar_mult(scalar_mult(partial_dw[i], lr), -1);
@@ -174,7 +184,6 @@ int main(){
 		cout << "\n" << "\n";
 	}
 
-	
-	
+
 	return 0;
 }

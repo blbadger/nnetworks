@@ -13,11 +13,11 @@ vector<vector<float>> matmult(vector<vector<float>> mat1, vector<vector<float>> 
 		cout << "Matrix size error: mat1 row length /= mat2 col length";
 		return res;
 	}
-	for (int k=0; k < mat1.size(); k++){
+	for (int k=0; k < int(mat1.size()); k++){
 		vector<float> temp;
-		for (int i=0; i < mat2[0].size(); i++){
+		for (int i=0; i < int(mat2[0].size()); i++){
 			float sum = 0;
-			for (int j=0; j < mat2.size(); j++){
+			for (int j=0; j < int(mat2.size()); j++){
 				sum += mat1[k][j] * mat2[j][i];
 			}
 			temp.push_back(sum);
@@ -61,8 +61,8 @@ vector<float> transpose_row(vector<float> arr){
 	}
 
 vector<vector<float>> sigmoid(vector<vector<float>> arr) {
-	for (int i=0; i < arr.size(); i++){
-		for (int j=0; j < arr[i].size(); j++){
+	for (int i=0; i < int(arr.size()); i++){
+		for (int j=0; j < int(arr[i].size()); j++){
 			arr[i][j] = 1. / (1. + std::pow(2.7828, -arr[i][j]));
 			}
 		}
@@ -72,9 +72,9 @@ vector<vector<float>> sigmoid(vector<vector<float>> arr) {
 
 vector<vector<float>> scalar_mult(vector<vector<float>> arr, float scalar){
 	vector<vector<float>> res;
-	for (int i=0; i < arr.size(); i++){
+	for (int i=0; i < int(arr.size()); i++){
 		vector<float> temp;
-		for (int j=0; j < arr[0].size(); j++){
+		for (int j=0; j < int(arr[0].size()); j++){
 			temp.push_back(arr[i][j] * scalar);
 		}
 		res.push_back(temp);
@@ -84,8 +84,8 @@ vector<vector<float>> scalar_mult(vector<vector<float>> arr, float scalar){
 
 vector<vector<float>> scalar_add(vector<vector<float>> arr, float scalar){
 	vector<float> res;
-	for (int i=0; i < arr.size(); i++){
-		for (int j=0; j < arr[i].size(); j++){
+	for (int i=0; i < int(arr.size()); i++){
+		for (int j=0; j < int(arr[i].size()); j++){
 			arr[i][j] = arr[i][j] + scalar;
 		}
 	}
@@ -99,9 +99,9 @@ vector<vector<float>> hadamard(vector<vector<float>> arr1, vector<vector<float>>
 		 return res;
 	}
 	
-	for (int i=0; i < arr1.size(); i++){
+	for (int i=0; i < int(arr1.size()); i++){
 		vector<float> temp;
-		for (int j=0; j < arr1[0].size(); j++){
+		for (int j=0; j < int(arr1[0].size()); j++){
 			temp.push_back(arr1[i][j] * arr2[i][j]);
 		}
 		res.push_back(temp);
@@ -118,9 +118,9 @@ vector<vector<float>> matadd(vector<vector<float>> arr1, vector<vector<float>> a
 	
 	vector<vector<float>> res;
 	
-	for (int i=0; i < arr1.size(); i++){
+	for (int i=0; i < int(arr1.size()); i++){
 		vector<float> temp;
-		for (int j=0; j < arr1[0].size(); j++){
+		for (int j=0; j < int(arr1[0].size()); j++){
 			temp.push_back(arr1[i][j] + arr2[i][j]);
 		}
 		res.push_back(temp);

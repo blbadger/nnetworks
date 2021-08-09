@@ -111,7 +111,6 @@ class FullNetwork:
 		dc_dw = []
 		dc_db.append(error)
 		dc_dw.append(np.dot(error, activations[-2].T))
-		print (len(activations[0]))
 
 		# backpropegate to previous layers
 		for i in range(2, self.item_length):
@@ -119,7 +118,6 @@ class FullNetwork:
 
 			# update partial derivatives with new error
 			dc_db.append(error)
-			print (activations[-i-1].shape)
 			dc_dw.append(np.dot(error, activations[-i-1].T))
 
 		# update weights and biases

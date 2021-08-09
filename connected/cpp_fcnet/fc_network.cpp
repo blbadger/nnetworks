@@ -129,7 +129,7 @@ class Network{
 	
 	vector<vector<float>> network_output(vector<vector<float>> output){
 		
-		for (int i=0; i < architecture.size() - 1; i++){
+		for (int i=0; i < int(architecture.size()) - 1; i++){
 			vector<vector<float>> weight_arr = weights[i];
 			vector<vector<float>> biases_arr = biases[i];
 			vector<vector<float>> transposed_weight = transpose(weight_arr);
@@ -154,7 +154,7 @@ class Network{
 		vector<vector<vector<float>>> activations_arr;
 		activations_arr.push_back(output);
 		
-		for (int i=1; i < architecture.size(); i++){
+		for (int i=1; i < int(architecture.size()); i++){
 			vector<vector<float>> weight_arr = weights[i-1];
 			vector<vector<float>> biases_arr = biases[i-1];
 			vector<vector<float>> transposed_weight= transpose(weight_arr); // 3x2 arr
@@ -193,11 +193,11 @@ class Network{
 			vector<vector<float>> activation = activation_function(z_vectors[i]);
 			vector<vector<float>> w_err = matmult(weights[i], error);
 			
-			vector<vector<float>> error =  hadamard(w_err, activation);
+			vector<vector<float>> error2 =  hadamard(w_err, activation);
 			
 			//update partial derivatives with error
 			dc_db.push_back(error);
-			dc_dw.push_back(matmult(error, transpose(activations_arr[i - 1])));
+			dc_dw.push_back(matmult(error2, transpose(activations_arr[i - 1])));
 		}
 		
 		// compile array of partial derivatives
@@ -205,28 +205,28 @@ class Network{
 		dc_dw = reverse(dc_dw);
 		vector<vector<vector<float>>> partial_dw;
 		
-		for (int i=0; i < dc_dw.size(); i++){
+		for (int i=0; i < int(dc_dw.size()); i++){
 			partial_dw.push_back(dc_dw[i]);
 		}
 
 		// gradient descent: update weights and biases
 		float lr = learning_rate;
 		
-		for (int i=0; i < weights.size(); i++){
+		for (int i=0; i < int(weights.size()); i++){
 			vector<vector<float>> direction = scalar_mult(scalar_mult(partial_dw[i], lr), -1);
 			weights[i] = matadd(weights[i], direction);
 		}
 		
-		for (int i=0; i < biases.size(); i++){
+		for (int i=0; i < int(biases.size()); i++){
 			vector<vector<float>> direction = scalar_mult(scalar_mult(partial_db[i], lr), -1);
 			biases[i] = matadd(biases[i], direction);
 		}
 			
 		vector<vector<vector<float>>> fin = weights;
 
-		for (int i=0; i < fin.size(); i++){
-			for (int j=0; j < fin[i].size(); j++){
-				for (int k=0; k < fin[i][j].size(); k++){
+		for (int i=0; i < int(fin.size()); i++){
+			for (int j=0; j < int(fin[i].size()); j++){
+				for (int k=0; k < int(fin[i][j].size()); k++){
 					cout << fin[i][j][k] << " ";
 				}
 				cout << "\n";
@@ -240,8 +240,6 @@ class Network{
 
 //train the network 
 int main() {
-	float learning_rate = 0.1;
-	
 	vector<vector<float>> output = {{1.},
 									{0.},
 									{-1.}};

@@ -31,9 +31,21 @@ float random_sample(float mean, float stdev){
 
 
 class Network{
-	vector<float> architecture = {784, 10, 10};
+	vector<float> architecture = {4, 3, 2};
 
 	int network_length = architecture.size();
+	
+	//vector<vector<vector<float>>> weights = {{{3, 2, 4, 1}, 
+										  //{2, 1, 0, -1},
+										  //{0, 3, -1, 1}},
+										 //{{-1, 2, 1},
+										  //{0.5, 1, 0}}};
+										  
+	//vector<vector<vector<float>>> biases = {{{2},
+											 //{0},
+											 //{-1}},
+											//{{1},
+											 //{-1}}};
 	
 	vector<vector<vector<float>>> biases;
 	vector<vector<vector<float>>> weights;
@@ -44,6 +56,7 @@ class Network{
 	 // initialize biases
 	public: 
 		void biases_init(){
+			
 			for (int i=1; i < network_length; i++){
 				vector<float> temp;
 				vector<vector<float>> temp2;
@@ -61,13 +74,20 @@ class Network{
 		}
 	
 		void print_biases(){
+			cout << "{";
+			cout << "\n";
 			for (auto u: biases){
+				cout << "{";
 				for (auto v: u){
+					cout << "{";
 					for (auto w: v) cout << w << " ";
-					cout << "\n";
+					cout << "}, ";
 				}
-				cout << "\n" << "\n";
+				cout << "}";
+				cout << "\n";
 			}
+			cout << "}";
+			cout << "\n" << "\n";
 		}
 	
 		//initialize weights
@@ -88,34 +108,45 @@ class Network{
 		}
 	
 		void print_weights(){
+			cout << "{";
+			cout << "\n";
 			for (auto u: weights){
+				cout << "{";
 				for (auto v: u){
+					cout << "{";
 					for (auto q:v){
 						cout << q << " ";
 					}
-					cout << "\n";
+					cout << "}, ";
 				}
-				cout << "\n" << "\n";
+				cout << "}";
+				cout << "\n";
 			}
+			cout << "}";
+			cout << "\n" << "\n";
 		}
 	
 	vector<vector<float>> activation_function(vector<vector<float>> z_array){
+		
 			vector<vector<float>> sigmoid_arr = sigmoid(z_array); 
 			return sigmoid_arr;
 		};
 
 
 	vector<vector<float>> activation_prime(vector<vector<float>> z){
-		vector<vector<float>> neg_z = scalar_mult(z, -1);
 		
+		vector<vector<float>> neg_z = scalar_mult(z, -1);
 		vector<vector<float>> sigmoid_prime_z = hadamard(activation_function(z), scalar_add(neg_z, 1));
 		return sigmoid_prime_z;
 	};
+	
 
 	vector<vector<float>> cost_function_derivative(vector<vector<float>> output_activations, vector<vector<float>> y){
+		
 		vector<vector<float>> neg_y = scalar_mult(y, -1);
 		return matadd(output_activations, neg_y);
 	};
+	
 	
 	vector<vector<float>> network_output(vector<vector<float>> output){
 		
@@ -124,13 +155,6 @@ class Network{
 			vector<vector<float>> biases_arr = biases[i];
 			vector<vector<float>> transposed_weight = transpose(weight_arr);
 			
-			//for (int i=0; i < transposed_weight.size(); i++){
-				//for (int j=0; j < transposed_weight[i].size(); j++){
-					//cout << transposed_weight[i][j] << " ";
-				//}
-				//cout << "\n";
-			//}
-
 			vector<vector<float>> z_vec = matmult(weight_arr, output);
 			
 			vector<vector<float>> activations = matadd(z_vec, biases_arr);
@@ -140,14 +164,15 @@ class Network{
 		return output;
 	}
 	
-	vector<vector<vector<float>>> forward(vector<vector<float>> output, vector<vector<float>> classification){
+	vector<vector<vector<float>>> forward(vector<vector<float>> output){
+		
 		vector<vector<vector<float>>> activations_arr;
 		activations_arr.push_back(output);
 		
-		for (int i=1; i < int(architecture.size()); i++){
+		for (int i=1; i < architecture.size(); i++){
 			vector<vector<float>> weight_arr = weights[i-1];
 			vector<vector<float>> biases_arr = biases[i-1];
-			vector<vector<float>> transposed_weight= transpose(weight_arr); // 3x2 arr
+			vector<vector<float>> transposed_weight= transpose(weight_arr); 
 
 			vector<vector<float>> z_vec = matmult(weight_arr, output);
 			vector<vector<float>> activations = matadd(z_vec, biases_arr);
@@ -160,11 +185,12 @@ class Network{
 
 		return activations_arr;
 	}
+
 	
 	void backpropegate(vector<vector<float>> output, vector<vector<float>> classification){
 		
 		// compute output error
-		vector<vector<vector<float>>> activations_arr = forward(output, classification);
+		vector<vector<vector<float>>> activations_arr = forward(output);
 		vector<vector<float>> last_acts = activations_arr[activations_arr.size()-1];
 		
 		vector<vector<float>> last_prime = activation_prime(last_acts);
@@ -177,18 +203,27 @@ class Network{
 		// Partial derivatives of the last layer wrt error
 		dc_db.push_back(error);
 		dc_dw.push_back(matmult(error, transpose(activations_arr[activations_arr.size()-2])));
+		
+		//# backpropegate to previous layers
+		//for i in range(2, self.item_length):
+			//error = np.dot(self.weights[-i+1], error) * self.activation_prime(z_vectors[-i])
+
+			//# update partial derivatives with new error
+			//dc_db.append(error)
+			//dc_dw.append(np.dot(error, activations[-i-1].T))
 			 
 		// backpropegate error
 		for (int i=architecture.size() - 2; i > 0 ; i--){
 			vector<vector<float>> activation = activation_function(z_vectors[i]);
-			vector<vector<float>> w_err = matmult(weights[i], error);
+			vector<vector<float>> w_err = matmult(weights[i-1], error);
 			
-			vector<vector<float>> error2 =  hadamard(w_err, activation);
+			error =  hadamard(activation, w_err);
 			
 			//update partial derivatives with error
 			dc_db.push_back(error);
-			dc_dw.push_back(matmult(error2, transpose(activations_arr[i - 1])));
+			dc_dw.push_back(matmult(error, transpose(activations_arr[i - 1])));
 		}
+		return;
 		
 		// compile array of partial derivatives
 		vector<vector<vector<float>>> partial_db = reverse(dc_db);
@@ -212,17 +247,17 @@ class Network{
 			biases[i] = matadd(biases[i], direction);
 		}
 			
-		vector<vector<vector<float>>> fin = weights;
+		//vector<vector<vector<float>>> fin = weights;
 
-		for (int i=0; i < int(fin.size()); i++){
-			for (int j=0; j < int(fin[i].size()); j++){
-				for (int k=0; k < int(fin[i][j].size()); k++){
-					cout << fin[i][j][k] << " ";
-				}
-				cout << "\n";
-			}
-			cout << "\n" << "\n";
-		}
+		//for (int i=0; i < int(fin.size()); i++){
+			//for (int j=0; j < int(fin[i].size()); j++){
+				//for (int k=0; k < int(fin[i][j].size()); k++){
+					//cout << fin[i][j][k] << " ";
+				//}
+				//cout << "\n";
+			//}
+			//cout << "\n" << "\n";
+		//}
 	}
 
 };
@@ -230,801 +265,12 @@ class Network{
 
 //train the network 
 int main() {
-	float output[784] = [[0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.12109375],
-       [0.75390625],
-       [0.9921875 ],
-       [0.98828125],
-       [0.9921875 ],
-       [0.83203125],
-       [0.08203125],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.16015625],
-       [0.67578125],
-       [0.984375  ],
-       [0.98828125],
-       [0.984375  ],
-       [0.98828125],
-       [0.984375  ],
-       [0.71484375],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.359375  ],
-       [0.91015625],
-       [0.953125  ],
-       [0.79296875],
-       [0.3984375 ],
-       [0.078125  ],
-       [0.28125   ],
-       [0.98828125],
-       [0.5546875 ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.91015625],
-       [0.828125  ],
-       [0.31640625],
-       [0.        ],
-       [0.08203125],
-       [0.3984375 ],
-       [0.75390625],
-       [0.66796875],
-       [0.078125  ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.48046875],
-       [0.9921875 ],
-       [0.58984375],
-       [0.        ],
-       [0.        ],
-       [0.2421875 ],
-       [0.4765625 ],
-       [0.9921875 ],
-       [0.58984375],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.79296875],
-       [0.98828125],
-       [0.58984375],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.71484375],
-       [0.98828125],
-       [0.43359375],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.16015625],
-       [0.9921875 ],
-       [0.83203125],
-       [0.59375   ],
-       [0.27734375],
-       [0.67578125],
-       [0.98828125],
-       [0.875     ],
-       [0.078125  ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.671875  ],
-       [0.984375  ],
-       [0.98828125],
-       [0.984375  ],
-       [0.98828125],
-       [0.984375  ],
-       [0.79296875],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.3203125 ],
-       [0.63671875],
-       [0.79296875],
-       [0.8359375 ],
-       [0.98828125],
-       [0.3984375 ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.98828125],
-       [0.984375  ],
-       [0.3984375 ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.3203125 ],
-       [0.9921875 ],
-       [0.91015625],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.16015625],
-       [0.94921875],
-       [0.98828125],
-       [0.2734375 ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.28125   ],
-       [0.98828125],
-       [0.79296875],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.16015625],
-       [0.91015625],
-       [0.984375  ],
-       [0.31640625],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.48046875],
-       [0.9921875 ],
-       [0.91015625],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.08203125],
-       [0.87109375],
-       [0.98828125],
-       [0.43359375],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.67578125],
-       [0.98828125],
-       [0.5546875 ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.3203125 ],
-       [0.98828125],
-       [0.828125  ],
-       [0.078125  ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.04296875],
-       [0.83203125],
-       [0.99609375],
-       [0.51171875],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.19921875],
-       [0.984375  ],
-       [0.75      ],
-       [0.1171875 ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ],
-       [0.        ]];
+	vector<vector<float>> output = {{1},
+									{0},
+									{-1},
+									{0.1}};
 								
-	float classification[10] = [[0.],
-       [0.],
-       [0.],
-       [0.],
-       [0.],
-       [0.],
-       [0.],
-       [1.],
-       [0.],
-       [0.]];	
+	vector<vector<float>> classification = {{0.}, {1.}};	
 	
 	
 	Network connected_net;

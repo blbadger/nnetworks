@@ -5,16 +5,14 @@
 
 using namespace std;
 
-vector<float> architecture = {3, 2, 2};
+vector<float> architecture = {3, 2, 1};
 vector<vector<vector<float>>> weights = {{{3, 2, 4}, 
 										  {2, 1, 0}},
-										 {{-1, 2},
-										  {0.5, 1}}};
+										 {{-1, 2}}};
 										  
 vector<vector<vector<float>>> biases = {{{2},
 										 {0}},
-										{{1},
-										 {-1}}};
+										{{1}}};
 
 vector<vector<float>> activation_function(vector<vector<float>> z_array){
 		vector<vector<float>> sigmoid_arr = sigmoid(z_array); 
@@ -95,7 +93,7 @@ int main(){
 									{0},
 									{-1}};
 								
-	vector<vector<float>> classification = {{0.}, {1.}};						
+	vector<vector<float>> classification = {{0.}};						
 	vector<vector<vector<float>>> activations_arr = forward(output, classification);
 	
 	vector<vector<float>> last_acts = activations_arr[activations_arr.size()-1];

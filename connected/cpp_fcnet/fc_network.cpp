@@ -20,6 +20,7 @@ float random_sample(float mean, float stdev){
     std::mt19937 gen(rd()); 
     
     float sample;
+    
 	// instance of class std::normal_distribution with specific mean and stddev
 	normal_distribution<float> distro(mean, stdev); 
 
@@ -191,9 +192,11 @@ class Network{
 		
 		// compute output error
 		vector<vector<vector<float>>> activations_arr = forward(output);
-		vector<vector<float>> last_acts = activations_arr[activations_arr.size()-1];
 		
-		vector<vector<float>> last_prime = activation_prime(last_acts);
+		vector<vector<float>> last_acts = activations_arr[activations_arr.size()-1];
+		vector<vector<float>> last_vecs = z_vectors[z_vectors.size()-1];
+		vector<vector<float>> last_prime = activation_prime(last_vecs);
+		
 		vector<vector<float>> error = hadamard(cost_function_derivative(last_acts, classification), last_prime);
 		
 		// initialize partial derivative arrays
@@ -204,26 +207,18 @@ class Network{
 		dc_db.push_back(error);
 		dc_dw.push_back(matmult(error, transpose(activations_arr[activations_arr.size()-2])));
 		
-		//# backpropegate to previous layers
-		//for i in range(2, self.item_length):
-			//error = np.dot(self.weights[-i+1], error) * self.activation_prime(z_vectors[-i])
-
-			//# update partial derivatives with new error
-			//dc_db.append(error)
-			//dc_dw.append(np.dot(error, activations[-i-1].T))
 			 
-		// backpropegate error
-		for (int i=architecture.size() - 2; i > 0 ; i--){
-			vector<vector<float>> activation = activation_function(z_vectors[i]);
-			vector<vector<float>> w_err = matmult(weights[i-1], error);
-			
-			error =  hadamard(activation, w_err);
+		// backpropegate (do not include input layer specified by architecture[0])
+		for (int i = architecture.size() - 2; i >= 1; i--){
+
+			vector<vector<float>> act = activation_prime(z_vectors[i-1]);
+			vector<vector<float>> w_err = matmult(transpose(weights[i]), error);
+			vector<vector<float>> error =  hadamard(w_err, act);
 			
 			//update partial derivatives with error
 			dc_db.push_back(error);
-			dc_dw.push_back(matmult(error, transpose(activations_arr[i - 1])));
+			dc_dw.push_back(matmult(error, transpose(activations_arr[i-1])));
 		}
-		return;
 		
 		// compile array of partial derivatives
 		vector<vector<vector<float>>> partial_db = reverse(dc_db);
@@ -276,10 +271,13 @@ int main() {
 	Network connected_net;
 	connected_net.biases_init();
 	connected_net.weights_init();
+	
+	// check initial weights and biases
 	connected_net.print_biases();
 	connected_net.print_weights();
 	connected_net.backpropegate(output, classification);
 	
+	// check modified weights and biases
 	connected_net.print_biases();
 	connected_net.print_weights();
 	return 0;

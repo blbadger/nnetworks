@@ -97,8 +97,8 @@ int main(){
 	vector<vector<vector<float>>> activations_arr = forward(output, classification);
 	
 	vector<vector<float>> last_acts = activations_arr[activations_arr.size()-1];
-	
-	vector<vector<float>> last_prime = activation_prime(last_acts);
+	vector<vector<float>> last_vecs = z_vectors[z_vectors.size()-1];
+	vector<vector<float>> last_prime = activation_prime(last_vecs);
 	vector<vector<float>> error = hadamard(cost_function_derivative(last_acts, classification), last_prime);
 	
 	
@@ -110,29 +110,29 @@ int main(){
 	dc_db.push_back(error);
 	dc_dw.push_back(matmult(error, transpose(activations_arr[activations_arr.size()-2])));
 	
-	//vector<vector<float>> f =  transpose(activations_arr[activations_arr.size()-2]);
+	vector<vector<float>> f = transpose(activations_arr[activations_arr.size()-2]);
 	
-		//cout << "[";
-		//for (int i=0; i < f.size(); i++){
-			//cout << "[";
-			//for (int j=0; j < f[i].size(); j++){
-				//cout << f[i][j] << " ";
-			//}
-			//cout << "]";
-			//cout << "\n";
-		//}
-		//cout << "]";
+		cout << "[";
+		for (int i=0; i < f.size(); i++){
+			cout << "[";
+			for (int j=0; j < f[i].size(); j++){
+				cout << f[i][j] << " ";
+			}
+			cout << "]";
+			cout << "\n";
+		}
+		cout << "]";
 		 
-	// backpropegate
-	for (int i=architecture.size() - 2; i > 0 ; i--){
-		vector<vector<float>> activation = activation_function(z_vectors[i]);
-		vector<vector<float>> w_err = matmult(weights[i], error);
-		
-		vector<vector<float>> error =  hadamard(w_err, activation);
+	// backpropegate (do not include input layer at i=0)
+	for (int i = architecture.size() - 2; i >= 1; i--){
+
+		vector<vector<float>> act = activation_prime(z_vectors[i-1]);
+		vector<vector<float>> w_err = matmult(transpose(weights[i]), error);
+		vector<vector<float>> error =  hadamard(w_err, act);
 		
 		//update partial derivatives with error
 		dc_db.push_back(error);
-		dc_dw.push_back(matmult(error, transpose(activations_arr[i - 1])));
+		dc_dw.push_back(matmult(error, transpose(activations_arr[i-1])));
 	}
 	
 	// update weights and biases

@@ -83,7 +83,6 @@ class FullNetwork:
 		for epoch in range(epochs):
 			for entry in data[:40000]:
 				self.update_network(entry, learning_rate)
-				print (entry)
 			number_correct = self.evaluate(data[40000:50000])
 			number_total = len(data[40000:50000])
 			print ('Epoch {} complete: {} / {}'.format(epoch, number_correct, number_total))

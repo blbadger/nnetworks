@@ -32,7 +32,7 @@ float random_sample(float mean, float stdev){
 
 
 class Network{
-	vector<float> architecture = {4, 3, 2};
+	vector<float> architecture = {10, 10, 2};
 
 	int network_length = architecture.size();
 	
@@ -211,9 +211,9 @@ class Network{
 		// backpropegate (do not include input layer specified by architecture[0])
 		for (int i = architecture.size() - 2; i >= 1; i--){
 
-			vector<vector<float>> act = activation_prime(z_vectors[i-1]);
+			vector<vector<float>> sigp = activation_prime(z_vectors[i-1]);
 			vector<vector<float>> w_err = matmult(transpose(weights[i]), error);
-			vector<vector<float>> error =  hadamard(w_err, act);
+			vector<vector<float>> error =  hadamard(w_err, sigp);
 			
 			//update partial derivatives with error
 			dc_db.push_back(error);
@@ -260,10 +260,16 @@ class Network{
 
 //train the network 
 int main() {
-	vector<vector<float>> output = {{1},
+	vector<vector<float>> output = {{0},
 									{0},
-									{-1},
-									{0.1}};
+									{0.1},
+									{0.1},
+									{0},
+									{0},
+									{0.1},
+									{0.2},
+									{0.5},
+									{0.2}};
 								
 	vector<vector<float>> classification = {{0.}, {1.}};	
 	

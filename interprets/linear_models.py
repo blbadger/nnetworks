@@ -52,7 +52,7 @@ def format_data():
 
 # format_data()
 
-df = pd.read_csv('formatted_historical.csv')
+df = pd.read_csv('data/formatted_historical.csv')
 
 
 def linear_regression(df):
@@ -157,7 +157,7 @@ def linear_fit(fit, file_name):
 	return df
 
 
-file_name = 'predict_data.csv'
+file_name = 'data/predict_data.csv'
 df = linear_fit(fit, file_name)
 
 

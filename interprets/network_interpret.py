@@ -92,3 +92,157 @@ class Interpret:
 			plt.tight_layout()
 			plt.show()
 			plt.close()
+
+
+class Interpret:
+
+	def __init__(self, model, input_tensors, output_tensors, fields):
+		self.model = model 
+		self.field_array = fields
+		self.output_tensors = output_tensors
+		self.input_tensors = input_tensors
+
+
+	def occlusion(self, input_tensor, field_array):
+		"""
+		Generates a perturbation-type attribution using occlusion.
+
+		Args:
+			input_tensor: torch.Tensor
+			field_array: arr[int], indicies that mark ends of each field 
+
+		Returns:
+			occlusion_arr: array[float] of scores per input index
+
+		"""
+
+		occl_size = 1
+
+		output = self.model(input_tensor)
+		zeros_tensor = torch.zeros(input_tensor)
+		occlusion_arr = [0 for i in range(len(input_tensor))]
+		indicies_arr = []
+		total_index = 0
+
+		for i in range(len(field_array)):
+
+			# set all elements of a particular field to 0
+			input_copy = torch.clone(input_tensor)
+			for j in range(total_index, total_index + field_array[i]):
+				input_copy[j] = 0.
+
+			total_index += field_array[i]
+
+			output_missing = self.model(input_copy)
+
+			# assumes a 1-dimensional output
+			occlusion = abs(float(output) - float(output_missing))
+			indicies_arr.append(i)
+
+		# max-normalize occlusions
+		if max(occlusion_arr) != 0:
+			correction_factor = 1 / (max(occlusion_arr))
+			occlusion_arr = [i*correction_factor for i in occlusion_arr]
+
+		return indicies_arr, occlusion_arr
+
+
+	def gradientxinput(self, input_tensor, output_shape, model):
+		"""
+		 Compute a gradientxinput attribution score
+
+		 Args:
+		 	input: torch.Tensor() object of input
+		 	model: Transformer() class object, trained neural network
+
+		 Returns:
+		 	gradientxinput: arr[float] of input attributions
+
+		"""
+
+		# change output to float
+		input.requires_grad = True
+		output = model.forward(input_tensor)
+
+		# only scalars may be assigned a gradient
+		output = output.reshape(1, output_shape).sum()
+
+		# backpropegate output gradient to input
+		output.backward(retain_graph=True)
+
+		# compute gradient x input
+		final = torch.abs(input_tensor.grad) * input_tensor
+
+		# separate out individual characters
+		saliency_arr = []
+		s = 0
+		for i in range(len(final)):
+			if i % 67 ==0 and i > 0: # assumes ASCII character set
+				saliency_arr.append(s)
+				s = 0
+			s += float(final[i])
+
+		# append final element
+		saliency_arr.append(s)
+
+		# max norm
+		for i in range(len(inputxgrad)):
+			maximum = max(inputxgrad[i], maximum)
+
+		# prevent a divide by zero error
+		if maximum != 0:
+			for i in range(len(inputxgrad)):
+				inputxgrad[i] /= maximum
+
+		return inputxgrad
+
+
+	def heatmap(self, n_observed=100, method='combined'):
+		"""
+		Generates a heatmap of attribution scores per input element for
+		n_observed inputs
+
+		Args:
+			n_observed: int, number of inputs
+			method: str, one of 'combined', 'gradientxinput', 'occlusion'
+
+		Returns:
+			None (saves matplotlib.pyplot figure)
+
+		"""
+		attributions_array = []
+
+		for i in range(n_observed):
+			input_tensor = self.input_tensors[i]
+			if method == 'combined':
+				occlusion = self.occlusion(input_tensor)
+				gradxinput = self.gradientxinput(input_tensor)
+				attribution = [(i+j)/2 for i, j in zip(occlusion, gradxinput)]
+
+			elif method == 'gradientxinput':
+				attribution = self.gradientxinput(input_tensor)
+
+			else:
+				attribution = self.occlusion(input_tensor)
+
+			attributions_array.append(attributions)
+
+		plt.imshow(attributions_array)
+		plt.savefig('attributions')
+		plt.close()
+		
+		return
+
+
+
+
+
+
+
+
+
+
+
+
+
+

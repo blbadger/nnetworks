@@ -70,15 +70,14 @@ class Format:
 			inputs = self.test_inputs
 
 		if short == True:
-			# remove null entries
-			inputs = inputs.applymap(lambda x: '_'*n i str(x) in ['', '(null)'] else str(x)[:n])
+			inputs = inputs.applymap(lambda x: '_'*n_taken if str(x) in ['', '(null)'] else str(x)[:n])
 		else:
-			inputs = inputs.applymap(lambda x:'_'*n if str(x) in ['', '(null)'] else str(x))
+			inputs = inputs.applymap(lambda x:'_'*n_taken if str(x) in ['', '(null)'] else str(x))
 
-		inputs = inputs.applymap(lambda x: '_'*(n-len(x)) + x)
+		inputs = inputs.applymap(lambda x: '_'*(n_taken-len(x)) + x)
 
 		i = index
-		string_arr = inputs.apply(lambda x: ' '.join(x.astype(str)), axis=1)
+		string_arr = inputs.apply(lambda x: '_'.join(x.astype(str)), axis=1)
 
 		return string_arr
 
@@ -103,6 +102,7 @@ class Format:
 		tensor = torch.zeros(tensor_shape)
 
 		for i, letter in enumerate(string):
+			print (letter)
 			tensor[i][places_dict[letter]] = 1.
 
 		tensor = torch.flatten(tensor)
@@ -116,7 +116,7 @@ class Format:
 		"""
 
 		input_arr, output_arr = [], []
-		string_arr = self.stringify()
+		string_arr = []
 		for i in range(len(self.training_outputs[self.prediction_feature])):
 			if self.training_outputs[self.prediction_feature][i]:
 				input_string = self.stringify_input(i)
@@ -164,3 +164,6 @@ class Format:
 			inputs.append(input_tensor)
 
 		return inputs
+
+
+

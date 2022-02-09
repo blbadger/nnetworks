@@ -17,8 +17,6 @@ import torch
 import torch.nn as nn
 from torch.nn import TransformerEncoder, TransformerEncoderLayer
 
-from linear_models import linear_regression
-
 # turn 'value set on df slice copy' warnings off
 pd.options.mode.chained_assignment = None
 
@@ -38,9 +36,6 @@ class MultiLayerPerceptron(nn.Module):
 		self.hidden2output = nn.Linear(hidden3_size, output_size)
 		self.relu = nn.ReLU()
 		self.dropout = nn.Dropout(0.3)
-		self.softmax = nn.Softmax(dim=1)
-		self.layernorm = nn.LayerNorm()
-
 
 	def forward(self, input):
 		"""
@@ -76,7 +71,17 @@ class Format():
 
 		df = pd.read_csv(file)	
 		df = df.applymap(lambda x: '' if str(x).lower()[0] == 'n' else x)
-		length = len(df['etime'])
+		df = df[:10000]
+		length = len(df['Elapsed Time'])
+		self.input_fields = ['Store Number', 
+							'Market', 
+							'Order Made',
+							'Cost',
+							'Total Deliverers', 
+							'Busy Deliverers', 
+							'Total Orders',
+							'Estimated Transit Time',
+							'Linear Estimation']
 
 		if training:
 			df = shuffle(df)
@@ -86,29 +91,16 @@ class Format():
 			split_i = int(length * 0.8)
 
 			training = df[:][:split_i]
-			self.training_inputs = training[['store_id', 
-									'market_id', 
-									'created_at',
-									'total_busy_dashers', 
-									'total_onshift_dashers', 
-									'total_outstanding_orders',
-									'estimated_store_to_consumer_driving_duration']]
-			self.training_outputs = training[['etime']]
+			self.training_inputs = training[self.input_fields]
+			self.training_outputs = [i for i in training['Elapsed Time'][:]]
 
 			validation_size = length - split_i
 			validation = df[:][split_i:split_i + validation_size]
-			self.val_inputs = validation[['store_id', 
-									'market_id', 
-									'created_at',
-									'total_busy_dashers', 
-									'total_onshift_dashers', 
-									'total_outstanding_orders',
-									'estimated_store_to_consumer_driving_duration']]
-			self.val_outputs = validation[['etime']]
+			self.val_inputs = validation[self.input_fields]
+			self.val_outputs = [i for i in validation['Elapsed Time'][:]]
 
 		else:
 			self.training_inputs = self.df # not actually training, but matches name for stringify
-			self.sequential_count = 0
 
 
 
@@ -126,38 +118,23 @@ class Format():
 		"""
 
 
-		taken_ls = [4, 1, 4, 3, 3, 3, 4]
+		taken_ls = [4, 1, 8, 4, 3, 3, 3, 4, 4]
 		i = index
 
 		string_arr = []
-		
-		if str(self.training_inputs['created_at'][i]) == '':
-			string_arr.append('')
-		else:
-			string_arr.append(str(self.training_inputs['created_at'][i])[5:7] + str(self.training_inputs['created_at'][i])[8:10])
+		fields_ls = self.input_fields
+		for i, field in enumerate(fields_ls):
+			entry = str(self.training_inputs[field][i])[:taken_ls[i]]
+			while len(entry) < taken_ls[i]:
+				entry += '_'
+			string_arr.append(entry)
 
-		fields_ls = ['market_id', 'store_id', 'total_onshift_dashers', 'total_busy_dashers', 'total_outstanding_orders', 'estimated_store_to_consumer_driving_duration']
-		for field in fields_ls:
-			if self.training_inputs[field][i] != '':
-				if (int(self.training_inputs[field][i])) > 0:
-					string_arr.append(str(int(self.training_inputs[field][i])))
-				else:
-					string_arr.append(str(-int(self.training_inputs[field][i])))
-			else:
-				string_arr.append('')
-
-		# fill in empty positions with .
-		for i in range(len(string_arr)):
-			while len(string_arr[i]) < taken_ls[i]:
-				string_arr[i] = '.' + string_arr[i]
-
-		string = ''.join(string_arr) + '...'
-
+		string = ''.join(string_arr)
 		return string
 
 
 	@classmethod
-	def string_to_tensor(self, string):
+	def string_to_tensor(self, input_string):
 		"""
 		Convert a string into a tensor
 
@@ -168,16 +145,22 @@ class Format():
 			tensor
 		"""
 
+		# TODO: switch to ASCII (upper and lowercase and a few special chars)
 		places_dict = {s:int(s) for s in '0123456789'}
 		places_dict['.'] = 10
+		places_dict[' '] = 11
+		places_dict['-'] = 12
+		places_dict[':'] = 13
+		places_dict['_'] = 14
 
 		# vocab_size x batch_size x embedding dimension (ie input length)
-		tensor_shape = (len(string), 1, 11) 
+		tensor_shape = (len(input_string), 1, 15) 
 		tensor = torch.zeros(tensor_shape)
 
-		for i, letter in enumerate(string):
+		for i, letter in enumerate(input_string):
 			tensor[i][0][places_dict[letter]] = 1.
 
+		tensor = tensor.flatten()
 		return tensor 
 
 
@@ -197,20 +180,24 @@ class Format():
 		return output, input, output_tensor, input_tensor
 
 
-	def sequential_sample(self):
+	def sequential_tensors(self):
 		"""
 		Choose one example from the test set, such that repeated
 		choices iterate over the entire set.
 
 		"""
 
-		index = self.sequential_count
+		input_tensors = []
+		output_tensors = []
+		for i in range(len(self.training_inputs)):
+			input_string = self.stringify_inputs(i)
+			input_tensor = self.string_to_tensor(input_string)
+			input_tensors.append(input_tensor)
 
-		input_string = self.stringify_input(index)
-		input_tensor = self.string_to_tensor(input)
-		self.sequential_count += 1
+			# convert output float to tensor directly
+			output_tensors.append(torch.Tensor([self.training_outputs[i]]))
 
-		return input, input_tensor
+		return input_tensors, output_tensors
 
 
 def weighted_mseloss(output, target):
@@ -255,31 +242,6 @@ def weighted_l1loss(output, target):
 	return loss
 
 
-def init_transformer(n_letters):
-	"""
-	Initialize a transformer model
-
-	Args:
-		n_letters: int, number of ascii inputs
-		emsize: int, the embedding dimension
-
-	Returns:
-		model: Transformer object
-
-	"""
-
-	# note that nhead (number of multi-head attention units) must be able to divide feedforward_size (hidden layer size)
-	feedforward_size = 280
-	nlayers = 3
-	nhead = 5
-	d_model = 25
-	n_output = 1
-
-	model = Transformer(n_output, n_letters, d_model, nhead, feedforward_size, nlayers)
-	return model
-
-
-
 def train_minibatch(input_tensor, output_tensor, optimizer, minibatch_size, model):
 	"""
 	Train a single minibatch
@@ -299,6 +261,7 @@ def train_minibatch(input_tensor, output_tensor, optimizer, minibatch_size, mode
 
 	output = model(input_tensor)
 	output_tensor = output_tensor.reshape(minibatch_size, 1)
+	loss_function = torch.nn.L1Loss()
 
 	loss = loss_function(output, output_tensor)
 	optimizer.zero_grad() # prevents gradients from adding between minibatches
@@ -310,7 +273,7 @@ def train_minibatch(input_tensor, output_tensor, optimizer, minibatch_size, mode
 	return output, loss.item()
 
 
-def train_model(model, optimizer, minibatch_size=32):
+def train_model(model, optimizer, input_tensors, output_tensors, minibatch_size=16):
 	"""
 	Train the mlp model
 
@@ -336,7 +299,7 @@ def train_model(model, optimizer, minibatch_size=32):
 		output_tensors = [i[1] for i in pairs]
 		total_loss = 0
 
-		for i in range(0, len(train_input) - minibatch_size, minibatch_size):
+		for i in range(0, len(input_tensors) - minibatch_size, minibatch_size):
 			# stack tensors to make shape (minibatch_size, input_size)
 			input_batch = torch.stack(input_tensors[i:i + minibatch_size])
 			output_batch = torch.stack(output_tensors[i:i + minibatch_size])
@@ -353,12 +316,7 @@ def train_model(model, optimizer, minibatch_size=32):
 	return
 
 
-model = MultiLayerPerceptron(input_size, output_size)
-loss_function = nn.CrossEntropyLoss() # integer labels expected
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
-
-
-def train_network(model, optimizer, file, minibatch_size=32):
+def train_network(model, optimizer, file, minibatch_size=16):
 	"""
 	On-line training with random samples
 
@@ -380,14 +338,14 @@ def train_network(model, optimizer, file, minibatch_size=32):
 
 	# training iteration and epoch number specs
 	n_epochs = 50
-	input_samples = [sequential_sample() for i in range(len(inputs))]
 
 	start = time.time()
 	for i in range(n_epochs):
-		input_samples = input_samples.shuffle()
+		random.shuffle(input_samples)
 		for i in range(0, len(input_samples), minibatch_size):
 			if len(input_samples) - i < minibatch_size:
 				break
+
 			input_tensor = torch.cat([input_samples[i+j] for j in range(minibatch_size)])
 			output_tensor = torch.cat([output_samples[i+j] for j in range(minibatch_size)])
 
@@ -406,7 +364,19 @@ def train_network(model, optimizer, file, minibatch_size=32):
 	return
 
 
-train_network(model, optimizer, file)
+# TODO: switch possible characters to ascii
+n_letters = len('0123456789. -:')
+file = 'data/linear_historical.csv'
+f = Format(file, training=True)
+input_tensors, output_tensors = f.sequential_tensors()
+print (len(input_tensors))
+output_size = 1
+input_size = len(input_tensors[0])
+model = MultiLayerPerceptron(input_size, output_size)
+loss_function = nn.CrossEntropyLoss() # integer labels expected
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+
+train_model(model, optimizer, input_tensors, output_tensors)
 
 
 def test_network(model, validation_inputs, validation_outputs):
@@ -448,138 +418,6 @@ def predict(model, test_inputs):
 			prediction_array.append(model_output)
 
 	return prediction_array
-
-
-class Interpret:
-
-	def __init__(self, model, input_tensors, output_tensors, fields):
-		self.model = model 
-		self.field_array = fields
-		self.output_tensors = output_tensors
-		self.input_tensors = input_tensors
-
-
-	def occlusion(self, input_tensor, field_array):
-		"""
-		Generates a perturbation-type attribution using occlusion.
-
-		Args:
-			input_tensor: torch.Tensor
-			field_array: arr[int], indicies that mark ends of each field 
-
-		Returns:
-			occlusion_arr: array[float] of scores per input index
-
-		"""
-
-		occl_size = 1
-
-		output = self.model(input_tensor)
-		zeros_tensor = torch.zeros(input_tensor)
-		occlusion_arr = [0 for i in range(len(input_tensor))]
-		indicies_arr = []
-		total_index = 0
-
-		for i in range(len(field_array)):
-
-			# set all elements of a particular field to 0
-			input_copy = torch.clone(input_tensor)
-			for j in range(total_index, total_index + field_array[i]):
-				input_copy[j] = 0.
-
-			total_index += field_array[i]
-
-			output_missing = self.model(input_copy)
-
-			# assumes a 1-dimensional output
-			occlusion = abs(float(output) - float(output_missing))
-			indicies_arr.append(i)
-
-		# max-normalize occlusions
-		if max(occlusion_arr) != 0:
-			correction_factor = 1 / (max(occlusion_arr))
-			occlusion_arr = [i*correction_factor for i in occlusion_arr]
-
-		return indicies_arr, occlusion_arr
-
-
-	def gradientxinput(self, input_tensor, output_shape, model):
-		"""
-		 Compute a gradientxinput attribution score
-
-		 Args:
-		 	input: torch.Tensor() object of input
-		 	model: Transformer() class object, trained neural network
-
-		 Returns:
-		 	gradientxinput: arr[float] of input attributions
-
-		"""
-
-		# change output to float
-		input.requires_grad = True
-		output = model.forward(input_tensor)
-
-		# only scalars may be assigned a gradient
-		output = output.reshape(1, output_shape).sum()
-
-		# backpropegate output gradient to input
-		output.backward(retain_graph=True)
-
-		# compute gradient x input
-		final = torch.abs(input_tensor.grad) * input_tensor
-
-		# separate out individual characters
-		saliency_arr = []
-		s = 0
-		for i in range(len(final)):
-			if i % 67 ==0 and i > 0: # assumes ASCII character set
-				saliency_arr.append(s)
-				s = 0
-			s += float(final[i])
-
-		# append final element
-		saliency_arr.append(s)
-
-		# max norm
-		for i in range(len(inputxgrad)):
-			maximum = max(inputxgrad[i], maximum)
-
-		# prevent a divide by zero error
-		if maximum != 0:
-			for i in range(len(inputxgrad)):
-				inputxgrad[i] /= maximum
-
-		return inputxgrad
-
-
-	def heatmap(self, n_observed=100, method='combined'):
-		"""
-		Generates a heatmap of attribution scores per input element for
-		n_observed inputs
-
-		Args:
-			n_observed: int, number of inputs
-			method: str, one of 'combined', 'gradientxinput', 'occlusion'
-
-		Returns:
-			None (saves matplotlib.pyplot figure)
-
-		"""
-
-		if method == 'combined':
-			occlusion = self.occlusion(input_tensor)
-			gradxinput = self.gradientxinput(input_tensor)
-			attribution = [(i+j)/2 for i, j in zip(occlusion, gradxinput)]
-
-		elif method == 'gradientxinput':
-			attribution = self.gradientxinput(input_tensor)
-
-		else:
-			attribution = self.occlusion(input_tensor)
-
-
-
 
 
 

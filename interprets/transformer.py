@@ -69,7 +69,7 @@ class Transformer(nn.Module):
 		return
 
 
-	def forward(self, input_tensor, batch_size=1):
+	def forward(self, input_tensor, batch_size=8):
 		"""
 		Forward pass through network
 
@@ -260,9 +260,9 @@ def train_minibatch(input_tensor, output_tensor, optimizer, minibatch_size, mode
 
 	return output, loss.item()
 
-
+# TODO: switch possible characters to ascii
 n_letters = len('0123456789.')
-file = 'linear_historical.csv'
+file = 'data/linear_historical.csv'
 input_tensors = Format(file, 'Elapsed Time')
 print ([i for i in input_tensors.training_inputs.columns])
 

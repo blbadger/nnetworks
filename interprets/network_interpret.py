@@ -6,21 +6,23 @@ import numpy as np
 import pandas as pd 
 
 
-class Interpret:
+class StaticFCInterpret:
 
 	def __init__(self, model, file):
 		self.model = model
 		self.file = file
-		self.fields_ls = ['store_id', 
-						'market_id', 
-						'created_at',
-						'total_busy_dashers', 
-						'total_onshift_dashers', 
-						'total_outstanding_orders',
-						'estimated_store_to_consumer_driving_duration',
-						'linear_ests']
+		self.fields_ls = ['Store Number', 
+							'Market', 
+							'Order Made',
+							'Cost',
+							'Total Deliverers', 
+							'Busy Deliverers', 
+							'Total Orders',
+							'Estimated Transit Time',
+							'Linear Estimation']
+		self.embedding_dim = 15
 
-	def occlusion(self):
+	def occlusion(self, input_tensor):
 		"""
 		Generates a perturbation-type attribution using occlusion.
 
@@ -43,9 +45,8 @@ class Interpret:
 		output_tensor = self.model(input_tensor)
 
 		zeros_tensor = torch.zeros(input_tensor[:occl_size].shape)
-		indicies_arr = []
 		total_index = 0
-		taken_ls = [4, 1, 4, 3, 3, 3, 4, 4]
+		taken_ls = [4, 1, 8, 4, 3, 3, 3, 4, 4]
 		occlusion_arr = [0 for i in taken_ls]
 		start = 0
 		end = 0
@@ -59,16 +60,64 @@ class Interpret:
 			input_copy[start:end + 1][:] = zeros_tensor
 			output_missing = self.model(input_copy)
 			occlusion_arr[i] = abs(float(output_missing) - float(output_tensor))
-			indicies_arr.append(i)
 			start += taken_ls[i]
-
 
 		# max-normalize occlusions
 		if max(occlusion_arr) != 0:
 			correction_factor = 1 / (max(occlusion_arr))
 			occlusion_arr = [i*correction_factor for i in occlusion_arr]
 
-		return indicies_arr, occlusion_arr
+		return occlusion_arr
+
+
+	def gradientxinput(self, input_tensor):
+		"""
+		 Compute a gradientxinput attribution score
+
+		 Args:
+		 	input: torch.Tensor() object of input
+		 	model: Transformer() class object, trained neural network
+
+		 Returns:
+		 	gradientxinput: arr[float] of input attributions
+
+		"""
+
+		# change output to float
+		input.requires_grad = True
+		output = model.forward(input_tensor)
+
+		# only scalars may be assigned a gradient
+		output = output.reshape(1, output_shape).sum()
+
+		# backpropegate output gradient to input
+		output.backward(retain_graph=True)
+
+		# compute gradient x input
+		final = torch.abs(input_tensor.grad) * input_tensor
+
+		# separate out individual characters 
+		saliency_arr = []
+		s = 0
+		for i in range(len(final)):
+			if i % self.embedding_dim == 0 and i > 0: 
+				saliency_arr.append(s)
+				s = 0
+			s += float(final[i])
+
+		# append final element
+		saliency_arr.append(s)
+
+		# max norm
+		for i in range(len(gradxinput)):
+			maximum = max(gradxinput[i], maximum)
+
+		# prevent a divide by zero error
+		if maximum != 0:
+			for i in range(len(gradxinput)):
+				gradxinput[i] /= maximum
+
+		return gradxinput
 
 
 	def graph_attributions(self):
@@ -83,9 +132,13 @@ class Interpret:
 		
 		"""
 
+
+
 		# view horizontal bar charts of occlusion attributions for five input examples
 		for i in range(5):
-			indicies, occlusion = self.occlusion()
+			occlusion = self.occlusion(self.input_tensors[i])
+			gradientxinput = self.gradientxinput(self.input_tensors[i])
+			indicies_arr = [i for i in range(len(occlusion))]
 			plt.style.use('dark_background')
 			plt.barh(indicies, occlusion)
 			plt.yticks(np.arange(0, len(self.fields_ls)), [i for i in self.fields_ls])
@@ -177,13 +230,14 @@ class Interpret:
 		saliency_arr = []
 		s = 0
 		for i in range(len(final)):
-			if i % 67 ==0 and i > 0: # assumes ASCII character set
+			if i % 67 == 0 and i > 0: # assumes ASCII character set
 				saliency_arr.append(s)
 				s = 0
 			s += float(final[i])
 
 		# append final element
 		saliency_arr.append(s)
+		inputxgradient = saliency
 
 		# max norm
 		for i in range(len(inputxgrad)):
@@ -230,7 +284,7 @@ class Interpret:
 		plt.imshow(attributions_array)
 		plt.savefig('attributions')
 		plt.close()
-		
+
 		return
 
 

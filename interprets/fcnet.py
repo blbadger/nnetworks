@@ -71,7 +71,7 @@ class Format():
 
 		df = pd.read_csv(file)	
 		df = df.applymap(lambda x: '' if str(x).lower()[0] == 'n' else x)
-		df = df[:10000]
+		df = df[:2000]
 		length = len(df['Elapsed Time'])
 		self.input_fields = ['Store Number', 
 							'Market', 
@@ -92,19 +92,20 @@ class Format():
 
 			training = df[:][:split_i]
 			self.training_inputs = training[self.input_fields]
-			self.training_outputs = [i for i in training['Elapsed Time'][:]]
+			self.training_outputs = [i for i in training['positive_control'][:]]
 
 			validation_size = length - split_i
 			validation = df[:][split_i:split_i + validation_size]
-			self.val_inputs = validation[self.input_fields]
-			self.val_outputs = [i for i in validation['Elapsed Time'][:]]
+			self.validation_inputs = validation[self.input_fields]
+			self.validation_outputs = [i for i in validation['positive_control'][:]]
+			self.validation_inputs = self.validation_inputs.reset_index()
 
 		else:
 			self.training_inputs = self.df # not actually training, but matches name for stringify
 
 
 
-	def stringify_inputs(self, index):
+	def stringify_input(self, index, training=True):
 		"""
 		Compose array of string versions of relevant information in self.df 
 		Maintains a consistant structure to inputs regardless of missing values.
@@ -119,12 +120,16 @@ class Format():
 
 
 		taken_ls = [4, 1, 8, 4, 3, 3, 3, 4, 4]
-		i = index
 
 		string_arr = []
+		if training:
+			inputs = self.training_inputs.iloc[index]
+		else:
+			inputs = self.validation_inputs.iloc[index]
+
 		fields_ls = self.input_fields
 		for i, field in enumerate(fields_ls):
-			entry = str(self.training_inputs[field][i])[:taken_ls[i]]
+			entry = str(inputs[field])[:taken_ls[i]]
 			while len(entry) < taken_ls[i]:
 				entry += '_'
 			string_arr.append(entry)
@@ -180,22 +185,27 @@ class Format():
 		return output, input, output_tensor, input_tensor
 
 
-	def sequential_tensors(self):
+	def sequential_tensors(self, training=True):
 		"""
-		Choose one example from the test set, such that repeated
-		choices iterate over the entire set.
-
+		
 		"""
 
 		input_tensors = []
 		output_tensors = []
-		for i in range(len(self.training_inputs)):
-			input_string = self.stringify_inputs(i)
+		if training:
+			inputs = self.training_inputs
+			outputs = self.training_outputs
+		else:
+			inputs = self.validation_inputs
+			outputs = self.validation_outputs
+
+		for i in range(len(inputs)):
+			input_string = self.stringify_input(i, training=training)
 			input_tensor = self.string_to_tensor(input_string)
 			input_tensors.append(input_tensor)
 
 			# convert output float to tensor directly
-			output_tensors.append(torch.Tensor([self.training_outputs[i]]))
+			output_tensors.append(torch.Tensor([outputs[i]]))
 
 		return input_tensors, output_tensors
 
@@ -280,8 +290,6 @@ def train_model(model, optimizer, input_tensors, output_tensors, minibatch_size=
 	Args:
 		model: MultiLayerPerceptron object
 		optimizer: torch.optim object
-
-	kwargs:
 		minibatch_size: int
 
 	Returns:
@@ -316,7 +324,7 @@ def train_model(model, optimizer, input_tensors, output_tensors, minibatch_size=
 	return
 
 
-def train_network(model, optimizer, file, minibatch_size=16):
+def train_online(model, optimizer, file, minibatch_size=1):
 	"""
 	On-line training with random samples
 
@@ -337,7 +345,7 @@ def train_network(model, optimizer, file, minibatch_size=16):
 	training_data = Format(file, training=True)
 
 	# training iteration and epoch number specs
-	n_epochs = 50
+	n_epochs = 10
 
 	start = time.time()
 	for i in range(n_epochs):
@@ -363,39 +371,39 @@ def train_network(model, optimizer, file, minibatch_size=16):
 
 	return
 
-
-# TODO: switch possible characters to ascii
-n_letters = len('0123456789. -:')
-file = 'data/linear_historical.csv'
-f = Format(file, training=True)
-input_tensors, output_tensors = f.sequential_tensors()
-print (len(input_tensors))
-output_size = 1
-input_size = len(input_tensors[0])
-model = MultiLayerPerceptron(input_size, output_size)
-loss_function = nn.CrossEntropyLoss() # integer labels expected
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
-
-train_model(model, optimizer, input_tensors, output_tensors)
-
-
-def test_network(model, validation_inputs, validation_outputs):
+def test_model(model, validation_inputs, validation_outputs):
 	"""
 
 	"""
 
 	model.eval() # switch to evaluation mode (silence dropouts etc.)
-	count = 0
+	loss = torch.nn.L1Loss()
 
 	with torch.no_grad():
 		total_error = 0
 		for i in range(len(validation_inputs)):
-			output, input, output_tensor, input_tensor = Format.sequential_sample(dataframe, i)
+			input_tensor = validation_inputs[i]
+			output_tensor = validation_outputs[i]
 			model_output = model(input_tensor)
-			total_error += weighted_mseloss(model_output, output_tensor)
+			total_error += loss(model_output, output_tensor).item()
 
-	print (f'Average Error: {round(total_error / len(validation_inputs), 2)}')
+	print (f'Average Absolute Error: {round(total_error / len(validation_inputs), 2)}')
 	return
+
+
+n_letters = len('0123456789. -:_') # 15
+file = 'data/linear_historical.csv'
+form = Format(file, training=True)
+input_tensors, output_tensors = form.sequential_tensors(training=True)
+output_size = 1
+input_size = len(input_tensors[0])
+model = MultiLayerPerceptron(input_size, output_size)
+loss_function = nn.CrossEntropyLoss() # integer labels expected
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+train_model(model, optimizer, input_tensors, output_tensors)
+test_inputs, test_outputs = form.sequential_tensors(training=False)
+test_model(model, test_inputs, test_outputs)
+
 
 
 def predict(model, test_inputs):

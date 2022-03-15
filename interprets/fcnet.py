@@ -15,7 +15,9 @@ from sklearn.utils import shuffle
 
 import torch
 import torch.nn as nn
-from torch.nn import TransformerEncoder, TransformerEncoderLayer
+
+# import local libraries
+from network_interpret import StaticInterpret
 
 # turn 'value set on df slice copy' warnings off
 pd.options.mode.chained_assignment = None
@@ -35,7 +37,7 @@ class MultiLayerPerceptron(nn.Module):
 		self.hidden2hidden2 = nn.Linear(hidden2_size, hidden3_size)
 		self.hidden2output = nn.Linear(hidden3_size, output_size)
 		self.relu = nn.ReLU()
-		self.dropout = nn.Dropout(0.)
+		self.dropout = nn.Dropout(0.3)
 
 	def forward(self, input):
 		"""
@@ -65,12 +67,12 @@ class MultiLayerPerceptron(nn.Module):
 		return output
 
 
-class Format():
+class Format:
 
 	def __init__(self, file, training=True):
 
 		df = pd.read_csv(file)	
-		df = df.applymap(lambda x: '' if str(x).lower()[0] == 'n' else x)
+		df = df.applymap(lambda x: '' if str(x).lower() == 'nan' else x)
 		df = df[:10000]
 		length = len(df['Elapsed Time'])
 		self.input_fields = ['Store Number', 
@@ -87,17 +89,17 @@ class Format():
 			df = shuffle(df)
 			df.reset_index(inplace=True)
 
-			# 80/20 training/test split
+			# 80/20 training/validation split
 			split_i = int(length * 0.8)
 
 			training = df[:][:split_i]
 			self.training_inputs = training[self.input_fields]
-			self.training_outputs = [i for i in training['positive_control'][:]]
+			self.training_outputs = [i for i in training['positive_two'][:]]
 
 			validation_size = length - split_i
 			validation = df[:][split_i:split_i + validation_size]
 			self.validation_inputs = validation[self.input_fields]
-			self.validation_outputs = [i for i in validation['positive_control'][:]]
+			self.validation_outputs = [i for i in validation['positive_two'][:]]
 			self.validation_inputs = self.validation_inputs.reset_index()
 
 		else:
@@ -172,7 +174,15 @@ class Format():
 	def random_sample(self):
 		"""
 		Choose a random index from a training set
-		
+
+		Args:
+			None
+
+		Returns:
+			output: string
+			input: string
+			output_tensor: torch.Tensor
+			input_tensor: torch.Tensor
 		"""
 		index = random.randint(0, len(self.training_inputs['store_id']) - 1)
 
@@ -187,7 +197,12 @@ class Format():
 
 	def sequential_tensors(self, training=True):
 		"""
-		
+		kwargs:
+			training: bool
+
+		Returns:
+			input_tensors: torch.Tensor objects
+			output_tensors: torch.Tensor objects
 		"""
 
 		input_tensors = []
@@ -224,7 +239,8 @@ class ActivateNet:
 		input_size = len(self.input_tensors[0])
 		self.model = MultiLayerPerceptron(input_size, output_size)
 		self.optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-4)
-		
+		self.biases_arr = [[], [], []]
+		# self.optimizer = torch.optim.SGD(self.model.parameters(), lr=0.1, momentum=0.9)
 
 	def weighted_mseloss(self, output, target):
 		"""
@@ -301,6 +317,7 @@ class ActivateNet:
 
 	def plot_predictions(self, epoch_number):
 		"""
+		Plot
 
 		"""
 		self.model.eval() # switch to evaluation mode (silence dropouts etc.)
@@ -321,12 +338,101 @@ class ActivateNet:
 		plt.tight_layout()
 		plt.savefig('regression{0:04d}.png'.format(epoch_number), dpi=400)
 		plt.close()
+
+		return
+
+
+	def plot_biases(self, index):
+		"""
+		Image model biases as a scatterplot
+
+		Args:
+			index: int
+
+		Returns:
+			None
+		"""
+		self.model.eval()
+		arr = self.model.hidden2hidden2.bias[:6].detach().numpy()
+		self.biases_arr[0].append([arr[0], arr[1]])
+		self.biases_arr[1].append([arr[2], arr[3]])
+		self.biases_arr[2].append([arr[4], arr[5]])
+		plt.style.use('dark_background')
+		plt.plot([i[0] for i in self.biases_arr[0]], [i[1] for i in self.biases_arr[0]], '^', color='white', alpha=0.7, markersize=0.1)
+		plt.plot([i[0] for i in self.biases_arr[1]], [i[1] for i in self.biases_arr[1]], '^', color='red', alpha=0.7, markersize=0.1)
+		plt.plot([i[0] for i in self.biases_arr[2]], [i[1] for i in self.biases_arr[2]], '^', color='blue', alpha=0.7, markersize=0.1)
+		plt.axis('on')
+		plt.savefig('Biases_{0:04d}.png'.format(index), dpi=400)
+		plt.close()
+
+		return
+
+	def heatmap_weights(self, index):
+		"""
+		Plot model weights of one layer as a heatmap
+
+		Args:
+			index: int
+
+		Returns:
+			None
+
+		"""
+		self.model.eval()
+		arr = self.model.hidden2hidden2.weight.detach()
+		arr = torch.reshape(arr, (2000, 1))
+		arr = arr[:44*44]
+		arr = torch.reshape(arr, (44, 44))
+		arr = arr.numpy()
+		plt.imshow(arr, interpolation='spline16', aspect='auto', cmap='inferno')
+		plt.style.use('dark_background')
+		plt.axis('off')
+		plt.savefig('heatmap_{0:04d}.png'.format(index), dpi=400, bbox_inches='tight', pad_inches=0)
+		plt.close()
+		return
+
+
+	def heatmap_biases(self, index):
+		"""
+		Plot model biases as a rectangular heatmap
+
+		Args:
+			index: int
+
+		Returns:
+			None
+
+		"""
+		self.model.eval()
+		arr = self.model.hidden2hidden.bias.detach().numpy()
+
+		# convert to 10x10 array
+		arr2 = []
+		j = 0
+		while j in range(len(arr)):
+			ls = []
+			while len(ls) < 10 and j < len(arr):
+				ls.append(round(arr[j], 3))
+				j += 1
+			arr2.append(ls)
+		
+		arr2 = np.array(arr2)
+		plt.imshow(arr2, interpolation='spline16', aspect='auto', cmap='inferno')
+		for (y, x), label in np.ndenumerate(arr2):
+			plt.text(x, y, '{:1.3f}'.format(label), ha='center', va='center')
+
+		plt.axis('off')
+		plt.rcParams.update({'font.size': 6})
+		# plt.style.use('dark_background')
+		plt.savefig('heatmap_{0:04d}.png'.format(index), dpi=400, bbox_inches='tight', pad_inches=0)
+		plt.close()
+
 		return
 
 
 	def train_model(self, minibatch_size=32):
 		"""
-		Train the mlp model
+		Train the neural network.
 
 		Args:
 			model: MultiLayerPerceptron object
@@ -359,64 +465,22 @@ class ActivateNet:
 
 				output, loss = self.train_minibatch(input_batch, output_batch, minibatch_size)
 				total_loss += loss
-				if i % 100 == 0:
-					print (f'Epoch {epoch} complete: {total_loss} loss')
-					self.plot_predictions(count)
-					count += 1
-
-		return
-
-
-	def train_online(self, file, minibatch_size=1):
-		"""
-		On-line training with random samples
-
-		Args:
-			model: Transformer object
-			optimizer: torch.optim object of choice
-
-		kwags:
-			minibatch_size: int, number of samples per gradient update
-
-		Return:
-			none (modifies model in-place)
-
-		"""
-
-		self.model.train()
-		current_loss = 0
-		training_data = Format(file, training=True)
-
-		# training iteration and epoch number specs
-		n_epochs = 10
-
-		start = time.time()
-		for i in range(n_epochs):
-			random.shuffle(input_samples)
-			for i in range(0, len(self.input_samples), minibatch_size):
-				if len(input_samples) - i < minibatch_size:
-					break
-
-				input_tensor = torch.cat([input_samples[i+j] for j in range(minibatch_size)])
-				output_tensor = torch.cat([output_samples[i+j] for j in range(minibatch_size)])
-
-				# define the output and backpropegate loss
-				output, loss = train_random_input(output_tensor, input_tensor)
-
-				# sum to make total loss
-				current_loss += loss 
-
-				if i % n_per_epoch == 0 and i > 0:
-					etime = time.time() - start
-					ave_error = round(current_loss / n_per_epoch, 2)
-					print (f'Epoch {i//n_per_epoch} complete \n Average error: {ave_error} \n Elapsed time: {round(etime, 2)}s \n' + '~'*30)
-					current_loss = 0
-
+				# if i % 100 == 0:
+				# 	print (f'Epoch {epoch} complete: {total_loss} loss')
+				# 	self.heatmap_weights(count)
+				# 	count += 1
 		return
 
 
 	def test_model(self):
 		"""
+		Test the model using a validation set
+
+		Args:
+			None
+
+		Returns:
+			None
 
 		"""
 
@@ -425,13 +489,13 @@ class ActivateNet:
 
 		with torch.no_grad():
 			total_error = 0
-			for i in range(len(validation_inputs)):
+			for i in range(len(self.validation_inputs)):
 				input_tensor = self.validation_inputs[i]
 				output_tensor = self.validation_outputs[i]
-				model_output = model(input_tensor)
+				model_output = self.model(input_tensor)
 				total_error += loss(model_output, output_tensor).item()
 
-		print (f'Average Absolute Error: {round(total_error / len(validation_inputs), 2)}')
+		print (f'Average Absolute Error: {round(total_error / len(self.validation_inputs), 2)}')
 		return
 
 
@@ -458,11 +522,14 @@ class ActivateNet:
 		return prediction_array
 
 
-network = ActivateNet(400)
+network = ActivateNet(1)
 network.train_model()
 network.test_model()
-
-
+input_tensors, output_tensors = network.validation_inputs, network.validation_outputs
+model = network.model
+interpret = StaticInterpret(model, input_tensors, output_tensors)
+# print (interpret.occlusion(input_tensors[0]))
+# print (len(interpret.occlusion(input_tensors[0])))
 
 
 

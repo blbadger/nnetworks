@@ -1,67 +1,60 @@
 # network_interpret.py
-
 import torch
 import matplotlib.pyplot as plt
 import numpy as np 
 import pandas as pd 
 
 
-class StaticFCInterpret:
+class StaticInterpret:
 
-	def __init__(self, model, file):
-		self.model = model
-		self.file = file
+	def __init__(self, model, input_tensors, output_tensors):
+		self.model = model 
+		self.output_tensors = output_tensors
+		self.input_tensors = input_tensors
 		self.fields_ls = ['Store Number', 
-							'Market', 
-							'Order Made',
-							'Cost',
-							'Total Deliverers', 
-							'Busy Deliverers', 
-							'Total Orders',
-							'Estimated Transit Time',
-							'Linear Estimation']
+						'Market', 
+						'Order Made',
+						'Cost',
+						'Total Deliverers', 
+						'Busy Deliverers', 
+						'Total Orders',
+						'Estimated Transit Time',
+						'Linear Estimation']
 		self.embedding_dim = 15
+		self.taken_ls = [4, 1, 8, 4, 3, 3, 3, 4, 4]
 
-	def occlusion(self, input_tensor):
+
+	def occlusion(self, input_tensor, occlusion_size=2):
 		"""
 		Generates a perturbation-type attribution using occlusion.
 
 		Args:
-			input: torch.Tensor
-			output: torch.Tensor
+			input_tensor: torch.Tensor
 			field_array: arr[int], indicies that mark ends of each field 
 
 		Returns:
 			occlusion_arr: array[float] of scores per input index
-			indicies_arr: array[int] 
 
 		"""
-
-		validation_data = Format(self.file, training=True)
-		occl_size = 1
-
-		output, input, output_tensor, input_tensor = validation_data.validation()
-
+		input_tensor = input_tensor.flatten()
 		output_tensor = self.model(input_tensor)
-
-		zeros_tensor = torch.zeros(input_tensor[:occl_size].shape)
+		zeros_tensor = torch.zeros(input_tensor[:occlusion_size*self.embedding_dim].shape)
 		total_index = 0
-		taken_ls = [4, 1, 8, 4, 3, 3, 3, 4, 4]
-		occlusion_arr = [0 for i in taken_ls]
-		start = 0
-		end = 0
-
-		for i in range(len(taken_ls)):
-			end += taken_ls[i]
-
+		occlusion_arr = [0 for i in range(sum(self.taken_ls))]
+		i = 0
+		while i in range(len(input_tensor)-(occlusion_size-1)*self.embedding_dim):
+			print (i)
 			# set all elements of a particular field to 0
 			input_copy = torch.clone(input_tensor)
-
-			input_copy[start:end + 1][:] = zeros_tensor
+			input_copy[i:i+occlusion_size*self.embedding_dim] = zeros_tensor
 			output_missing = self.model(input_copy)
-			occlusion_arr[i] = abs(float(output_missing) - float(output_tensor))
-			start += taken_ls[i]
+			occlusion_val = abs(float(output_missing) - float(output_tensor))
+			for j in range(occlusion_size):
+				occlusion_arr[i//self.embedding_dim+j] += occlusion_val
+			i += self.embedding_dim
 
+		for i in range(occlusion_size-1):
+			occlusion_arr[-i] += occlusion_val
 		# max-normalize occlusions
 		if max(occlusion_arr) != 0:
 			correction_factor = 1 / (max(occlusion_arr))
@@ -109,15 +102,52 @@ class StaticFCInterpret:
 		saliency_arr.append(s)
 
 		# max norm
-		for i in range(len(gradxinput)):
-			maximum = max(gradxinput[i], maximum)
+		for i in range(len(saliency_arr)):
+			maximum = max(saliency_arr[i], maximum)
 
 		# prevent a divide by zero error
 		if maximum != 0:
-			for i in range(len(gradxinput)):
-				gradxinput[i] /= maximum
+			for i in range(len(saliency_arr)):
+				saliency_arr[i] /= maximum
 
-		return gradxinput
+		return saliency_arr
+
+
+	def heatmap(self, n_observed=100, method='combined'):
+		"""
+		Generates a heatmap of attribution scores per input element for
+		n_observed inputs
+
+		Args:
+			n_observed: int, number of inputs
+			method: str, one of 'combined', 'gradientxinput', 'occlusion'
+
+		Returns:
+			None (saves matplotlib.pyplot figure)
+
+		"""
+		attributions_array = []
+
+		for i in range(n_observed):
+			input_tensor = self.input_tensors[i]
+			if method == 'combined':
+				occlusion = self.occlusion(input_tensor)
+				gradxinput = self.gradientxinput(input_tensor)
+				attribution = [(i+j)/2 for i, j in zip(occlusion, gradxinput)]
+
+			elif method == 'gradientxinput':
+				attribution = self.gradientxinput(input_tensor)
+
+			else:
+				attribution = self.occlusion(input_tensor)
+
+			attributions_array.append(attributions)
+
+		plt.imshow(attributions_array)
+		plt.savefig('attributions')
+		plt.close()
+
+		return
 
 
 	def graph_attributions(self):
@@ -132,8 +162,6 @@ class StaticFCInterpret:
 		
 		"""
 
-
-
 		# view horizontal bar charts of occlusion attributions for five input examples
 		for i in range(5):
 			occlusion = self.occlusion(self.input_tensors[i])
@@ -145,6 +173,8 @@ class StaticFCInterpret:
 			plt.tight_layout()
 			plt.show()
 			plt.close()
+
+		return
 
 
 class Interpret:

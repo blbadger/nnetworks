@@ -21,7 +21,7 @@ class StaticInterpret:
 						'Estimated Transit Time',
 						'Linear Estimation']
 		self.embedding_dim = 15
-		self.taken_ls = [4, 1, 8, 4, 3, 3, 3, 4, 4]
+		self.taken_ls = [4, 1, 12, 4, 3, 3, 3, 4, 4]
 
 
 	def occlusion(self, input_tensor, occlusion_size=2):
@@ -43,7 +43,6 @@ class StaticInterpret:
 		occlusion_arr = [0 for i in range(sum(self.taken_ls))]
 		i = 0
 		while i in range(len(input_tensor)-(occlusion_size-1)*self.embedding_dim):
-			print (i)
 			# set all elements of a particular field to 0
 			input_copy = torch.clone(input_tensor)
 			input_copy[i:i+occlusion_size*self.embedding_dim] = zeros_tensor
@@ -76,11 +75,12 @@ class StaticInterpret:
 
 		"""
 
-		# change output to float
-		input.requires_grad = True
-		output = model.forward(input_tensor)
+		# enforce the input tensor to be assigned a gradient
+		input_tensor.requires_grad = True
+		output = self.model.forward(input_tensor)
 
 		# only scalars may be assigned a gradient
+		output_shape = 1
 		output = output.reshape(1, output_shape).sum()
 
 		# backpropegate output gradient to input
@@ -102,6 +102,7 @@ class StaticInterpret:
 		saliency_arr.append(s)
 
 		# max norm
+		maximum = 0
 		for i in range(len(saliency_arr)):
 			maximum = max(saliency_arr[i], maximum)
 
@@ -113,7 +114,7 @@ class StaticInterpret:
 		return saliency_arr
 
 
-	def heatmap(self, n_observed=100, method='combined'):
+	def heatmap(self, count, n_observed=100, method='combined'):
 		"""
 		Generates a heatmap of attribution scores per input element for
 		n_observed inputs
@@ -141,10 +142,10 @@ class StaticInterpret:
 			else:
 				attribution = self.occlusion(input_tensor)
 
-			attributions_array.append(attributions)
+			attributions_array.append(attribution)
 
 		plt.imshow(attributions_array)
-		plt.savefig('attributions')
+		plt.savefig('attributions_{0:04d}.png'.format(count), dpi=400)
 		plt.close()
 
 		return
@@ -312,9 +313,8 @@ class Interpret:
 			attributions_array.append(attributions)
 
 		plt.imshow(attributions_array)
-		plt.savefig('attributions')
+		plt.savefig('attributions.png')
 		plt.close()
-
 		return
 
 

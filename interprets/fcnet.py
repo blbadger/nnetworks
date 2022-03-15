@@ -121,7 +121,7 @@ class Format:
 		"""
 
 
-		taken_ls = [4, 1, 8, 4, 3, 3, 3, 4, 4]
+		taken_ls = [4, 1, 12, 4, 3, 3, 3, 4, 4]
 
 		string_arr = []
 		if training:
@@ -465,10 +465,15 @@ class ActivateNet:
 
 				output, loss = self.train_minibatch(input_batch, output_batch, minibatch_size)
 				total_loss += loss
-				# if i % 100 == 0:
+				if i % 100 == 0:
 				# 	print (f'Epoch {epoch} complete: {total_loss} loss')
 				# 	self.heatmap_weights(count)
-				# 	count += 1
+					input_tensors, output_tensors = self.validation_inputs, self.validation_outputs
+					model = self.model
+					interpret = StaticInterpret(model, input_tensors, output_tensors)
+					interpret.heatmap(count, method='combined')
+					count += 1
+
 		return
 
 
@@ -522,15 +527,9 @@ class ActivateNet:
 		return prediction_array
 
 
-network = ActivateNet(1)
+network = ActivateNet(200)
 network.train_model()
 network.test_model()
-input_tensors, output_tensors = network.validation_inputs, network.validation_outputs
-model = network.model
-interpret = StaticInterpret(model, input_tensors, output_tensors)
-# print (interpret.occlusion(input_tensors[0]))
-# print (len(interpret.occlusion(input_tensors[0])))
-
 
 
 

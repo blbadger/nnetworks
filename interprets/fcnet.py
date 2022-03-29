@@ -1,6 +1,4 @@
-# transformer_regressor.py
-# Transformer-based neural network for regression and
-
+# fcnet.py
 # import standard libraries
 import string
 import time
@@ -12,6 +10,7 @@ import numpy as np
 import matplotlib.pyplot as plt 
 import pandas as pd
 from sklearn.utils import shuffle
+import PrettyTable
 
 import torch
 import torch.nn as nn
@@ -94,17 +93,16 @@ class Format:
 
 			training = df[:][:split_i]
 			self.training_inputs = training[self.input_fields]
-			self.training_outputs = [i for i in training['positive_two'][:]]
+			self.training_outputs = [i for i in training['positive_control'][:]]
 
 			validation_size = length - split_i
 			validation = df[:][split_i:split_i + validation_size]
 			self.validation_inputs = validation[self.input_fields]
-			self.validation_outputs = [i for i in validation['positive_two'][:]]
+			self.validation_outputs = [i for i in validation['positive_control'][:]]
 			self.validation_inputs = self.validation_inputs.reset_index()
 
 		else:
 			self.training_inputs = self.df # not actually training, but matches name for stringify
-
 
 
 	def stringify_input(self, index, training=True):
@@ -121,7 +119,7 @@ class Format:
 		"""
 
 
-		taken_ls = [4, 1, 12, 4, 3, 3, 3, 4, 4]
+		taken_ls = [4, 1, 15, 4, 4, 4, 4, 4, 4]
 
 		string_arr = []
 		if training:
@@ -149,16 +147,12 @@ class Format:
 			string: str, input as a string
 
 		Returns:
-			tensor
+			tensor: torch.Tensor() object
 		"""
 
-		# TODO: switch to ASCII (upper and lowercase and a few special chars)
 		places_dict = {s:int(s) for s in '0123456789'}
-		places_dict['.'] = 10
-		places_dict[' '] = 11
-		places_dict['-'] = 12
-		places_dict[':'] = 13
-		places_dict['_'] = 14
+		for i, char in enumerate('. -:_'):
+			places_dict[char] = i + 10
 
 		# vocab_size x batch_size x embedding dimension (ie input length)
 		tensor_shape = (len(input_string), 1, 15) 
@@ -240,7 +234,33 @@ class ActivateNet:
 		self.model = MultiLayerPerceptron(input_size, output_size)
 		self.optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-4)
 		self.biases_arr = [[], [], []]
-		# self.optimizer = torch.optim.SGD(self.model.parameters(), lr=0.1, momentum=0.9)
+
+	@staticmethod
+	def count_parameters(model):
+		"""
+		Display the tunable parameters in the model of interest
+
+		Args:
+			model: torch.nn object
+
+		Returns:
+			total_params: the number of model parameters
+
+		"""
+
+		table = PrettyTable(['Modules', 'Parameters'])
+		total_params = 0
+		for name, parameter in model.named_parameters():
+			if not parameter.requires_grad:
+				continue
+			param = parameter.numel()
+			table.add_row([name, param])
+			total_params += param 
+
+		print (table)
+		print (f'Total trainable parameters: {total_params}')
+		return total_params
+
 
 	def weighted_mseloss(self, output, target):
 		"""
@@ -353,7 +373,7 @@ class ActivateNet:
 			None
 		"""
 		self.model.eval()
-		arr = self.model.hidden2hidden2.bias[:6].detach().numpy()
+		arr = self.model.hidden2hidden.bias[:6].detach().numpy()
 		self.biases_arr[0].append([arr[0], arr[1]])
 		self.biases_arr[1].append([arr[2], arr[3]])
 		self.biases_arr[2].append([arr[4], arr[5]])
@@ -455,24 +475,27 @@ class ActivateNet:
 			total_loss = 0
 
 			for i in range(0, len(input_tensors) - minibatch_size, minibatch_size):
+
 				# stack tensors to make shape (minibatch_size, input_size)
+				if i == len(input_tensors) - minibatch_size:
+					break
 				input_batch = torch.stack(input_tensors[i:i + minibatch_size])
 				output_batch = torch.stack(output_tensors[i:i + minibatch_size])
 
-				# skip the last batch if too small
+				# skip the last batch if it is smaller than the other batches
 				if len(input_batch) < minibatch_size:
 					break
 
 				output, loss = self.train_minibatch(input_batch, output_batch, minibatch_size)
 				total_loss += loss
 				if i % 100 == 0:
-				# 	print (f'Epoch {epoch} complete: {total_loss} loss')
-				# 	self.heatmap_weights(count)
+					# self.heatmap_weights(count)
 					input_tensors, output_tensors = self.validation_inputs, self.validation_outputs
 					model = self.model
 					interpret = StaticInterpret(model, input_tensors, output_tensors)
-					interpret.heatmap(count, method='combined')
+					interpret.heatmap(count, method='occlusion')
 					count += 1
+			print (f'Epoch {epoch} complete: {total_loss} loss')
 
 		return
 
@@ -530,6 +553,21 @@ class ActivateNet:
 network = ActivateNet(200)
 network.train_model()
 network.test_model()
+
+# input_tensors, output_tensors = network.validation_inputs, network.validation_outputs
+# model = network.model
+# interpret = StaticInterpret(model, input_tensors, output_tensors)
+# interpret.readable_interpretation(1, method='combined')
+# interpret.heatmap(1)
+
+
+
+
+
+
+
+
+
 
 
 

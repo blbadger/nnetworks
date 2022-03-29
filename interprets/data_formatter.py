@@ -42,13 +42,11 @@ class Format:
 
 
 
-	def stringify_input(self, index, input_type='training', short=False, n_taken=4, remove_spaces=True):
+	def stringify_input(self, input_type='training', short=True, n_taken=4, remove_spaces=True):
 		"""
 		Compose array of string versions of relevant information in self.df 
 		Maintains a consistant structure to inputs regardless of missing values.
 
-		Args:
-			index: int, position of input
 		kwargs:
 			input_type: str, type of data input requested ('training' or 'test' or 'validation')
 			short: bool, if True then at most n_taken letters per feature is encoded
@@ -59,6 +57,7 @@ class Format:
 			array: string: str of values in the row of interest
 
 		"""
+		n = n_taken
 
 		if input_type == 'training':
 			inputs = self.training_inputs
@@ -75,8 +74,6 @@ class Format:
 			inputs = inputs.applymap(lambda x:'_'*n_taken if str(x) in ['', '(null)'] else str(x))
 
 		inputs = inputs.applymap(lambda x: '_'*(n_taken-len(x)) + x)
-
-		i = index
 		string_arr = inputs.apply(lambda x: '_'.join(x.astype(str)), axis=1)
 
 		return string_arr
@@ -88,21 +85,20 @@ class Format:
 		Convert a string into a tensor
 
 		Args:
-			string: str
+			string: arr[str]
 
 		Returns:
 			tensor: torch.Tensor
 
 		"""
 
-		places_dict = {s:i for i, s in enumerate('0123456789.:- ')}
+		places_dict = {s:i for i, s in enumerate('0123456789. -:_')}
 
 		# vocab_size x embedding dimension (ie input length)
 		tensor_shape = (len(string), len(places_dict)) 
 		tensor = torch.zeros(tensor_shape)
 
 		for i, letter in enumerate(string):
-			print (letter)
 			tensor[i][places_dict[letter]] = 1.
 
 		tensor = torch.flatten(tensor)
@@ -116,11 +112,11 @@ class Format:
 		"""
 
 		input_arr, output_arr = [], []
-		string_arr = []
+		string_arr = self.stringify_input()
 		for i in range(len(self.training_outputs[self.prediction_feature])):
 			if self.training_outputs[self.prediction_feature][i]:
-				input_string = self.stringify_input(i)
-				input_arr.append(self.string_to_tensor(input_string))
+				string = string_arr[i]
+				input_arr.append(self.string_to_tensor(string))
 				output_arr.append(torch.tensor(self.training_outputs[self.prediction_feature][i]))
 
 		return input_arr, output_arr

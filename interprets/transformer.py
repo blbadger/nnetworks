@@ -33,7 +33,7 @@ class Transformer(nn.Module):
 	to average across the states yielded by the transformer encoder before
 	passing this to a single hidden fully connected linear layer.
 	"""
-	def __init__(self, output_size, n_letters, d_model, nhead, feedforward_size, nlayers, dropout=0.3):
+	def __init__(self, output_size, n_letters, d_model, nhead, feedforward_size, nlayers, minibatch_size, dropout=0.3):
 
 		super().__init__()
 		self.posencoder = PositionalEncoding(d_model, dropout)
@@ -44,10 +44,11 @@ class Transformer(nn.Module):
 		self.encoder = nn.Embedding(n_letters, d_model)
 		self.d_model = d_model
 		self.init_weights()
-		self.transformer2hidden = nn.Linear(n_letters * d_model, 50)
+		self.transformer2hidden = nn.Linear(n_letters * 54, 50)
 		self.hidden2output = nn.Linear(50, 1)
 		self.relu = nn.ReLU()
 		self.n_letters = n_letters
+		self.minibatch_size = minibatch_size
 
 
 	def init_weights(self):
@@ -69,7 +70,7 @@ class Transformer(nn.Module):
 		return
 
 
-	def forward(self, input_tensor, batch_size=8):
+	def forward(self, input_tensor):
 		"""
 		Forward pass through network
 
@@ -80,21 +81,21 @@ class Transformer(nn.Module):
 			output: torch.Tensor, linear output
 		"""
 
-		# reshape input: vocab size x batch size x embedding dimension
+		# reshape input: sequence size x batch size x embedding dimension
 		length = len(input_tensor)
-		input = input_tensor.reshape(self.n_letters, batch_size, length)
+		input = input_tensor.reshape(length, self.minibatch_size, self.n_letters)
 
 		# apply (relative) positional encoding
 		input = self.posencoder(input)
 		output = self.transformer_encoder(input)
-		output = torch.flatten(output)
+		output = output.reshape(self.minibatch_size, length, self.n_letters)
+		output = torch.flatten(output, start_dim=1)
 		output = self.transformer2hidden(output)
 		output = self.relu(output)
 		output = self.hidden2output(output)
 
 		# return linear-activation output
 		return output
-
 
 
 class PositionalEncoding(nn.Module):
@@ -207,7 +208,7 @@ def weighted_l1loss(output, target):
 	return loss
 
 
-def init_transformer(n_letters):
+def init_transformer(n_letters, minibatch_size):
 	"""
 	Initialize a transformer model
 
@@ -224,10 +225,10 @@ def init_transformer(n_letters):
 	feedforward_size = 280
 	nlayers = 3
 	nhead = 5
-	d_model = 30
+	d_model = n_letters
 	n_output = 1
 
-	model = Transformer(n_output, n_letters, d_model, nhead, feedforward_size, nlayers)
+	model = Transformer(n_output, n_letters, d_model, nhead, feedforward_size, nlayers, minibatch_size)
 	return model
 
 
@@ -261,19 +262,20 @@ def train_minibatch(input_tensor, output_tensor, optimizer, minibatch_size, mode
 	return output, loss.item()
 
 # TODO: switch possible characters to ascii
-n_letters = len('0123456789.')
+n_letters = len('0123456789. -:_')
 file = 'data/linear_historical.csv'
 input_tensors = Format(file, 'Elapsed Time')
-print ([i for i in input_tensors.training_inputs.columns])
 
 input_arr, output_arr = input_tensors.transform_to_tensors()
-print (input_arr[0], output_arr[0])
-model = init_transformer(n_letters)
+line_length = len(input_arr[0]) // n_letters
+minibatch_size = 32
+model = init_transformer(n_letters, minibatch_size)
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 file = 'linear_historical.csv'
+loss_function = nn.L1Loss()
 
 
-def train_model(model, input_tensors, output_tensors, optimizer, minibatch_size=32):
+def train_model(model, input_tensors, output_tensors, optimizer, minibatch_size):
 	"""
 	Train the mlp model
 
@@ -308,6 +310,8 @@ def train_model(model, input_tensors, output_tensors, optimizer, minibatch_size=
 			if len(input_batch) < minibatch_size:
 				break
 
+			# default tensor size sequence_len x batch_size x embedding_size
+			input_batch = input_batch.reshape(line_length, minibatch_size, n_letters)
 			output, loss = train_minibatch(input_batch, output_batch, optimizer, minibatch_size, model)
 			total_loss += loss
 
@@ -381,7 +385,7 @@ def evaluate_network(model):
 	return
 
 
-train_model(model, input_arr, output_arr, optimizer)
+train_model(model, input_arr, output_arr, optimizer, minibatch_size)
 
 # model.load_state_dict(torch.load('transformer.pth'))
 

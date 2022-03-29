@@ -9,6 +9,7 @@ class StaticInterpret:
 
 	def __init__(self, model, input_tensors, output_tensors):
 		self.model = model 
+		self.model.eval()
 		self.output_tensors = output_tensors
 		self.input_tensors = input_tensors
 		self.fields_ls = ['Store Number', 
@@ -21,7 +22,7 @@ class StaticInterpret:
 						'Estimated Transit Time',
 						'Linear Estimation']
 		self.embedding_dim = 15
-		self.taken_ls = [4, 1, 12, 4, 3, 3, 3, 4, 4]
+		self.taken_ls = [4, 1, 15, 4, 4, 4, 4, 4, 4]
 
 
 	def occlusion(self, input_tensor, occlusion_size=2):
@@ -30,7 +31,9 @@ class StaticInterpret:
 
 		Args:
 			input_tensor: torch.Tensor
-			field_array: arr[int], indicies that mark ends of each field 
+		kwargs:
+			occlusion_size: int, number of sequential elements zeroed
+							out at once.
 
 		Returns:
 			occlusion_arr: array[float] of scores per input index
@@ -45,15 +48,16 @@ class StaticInterpret:
 		while i in range(len(input_tensor)-(occlusion_size-1)*self.embedding_dim):
 			# set all elements of a particular field to 0
 			input_copy = torch.clone(input_tensor)
-			input_copy[i:i+occlusion_size*self.embedding_dim] = zeros_tensor
+			input_copy[i:i + occlusion_size*self.embedding_dim] = zeros_tensor
+
 			output_missing = self.model(input_copy)
 			occlusion_val = abs(float(output_missing) - float(output_tensor))
+
 			for j in range(occlusion_size):
-				occlusion_arr[i//self.embedding_dim+j] += occlusion_val
+				occlusion_arr[i // self.embedding_dim + j] += occlusion_val
+
 			i += self.embedding_dim
 
-		for i in range(occlusion_size-1):
-			occlusion_arr[-i] += occlusion_val
 		# max-normalize occlusions
 		if max(occlusion_arr) != 0:
 			correction_factor = 1 / (max(occlusion_arr))
@@ -114,7 +118,7 @@ class StaticInterpret:
 		return saliency_arr
 
 
-	def heatmap(self, count, n_observed=100, method='combined'):
+	def heatmap(self, count, n_observed=50, method='combined', normalized=True):
 		"""
 		Generates a heatmap of attribution scores per input element for
 		n_observed inputs
@@ -144,10 +148,96 @@ class StaticInterpret:
 
 			attributions_array.append(attribution)
 
-		plt.imshow(attributions_array)
+		# max-normalize occlusions
+		if normalized and max(attributions_array) != 0:
+			for i, row in enumerate(attributions_array):
+				maximum_attribute = max(row)
+				correction_factor = 1 / maximum_attribute
+				attributions_array[i] = [j*correction_factor for j in row]
+				
+		plt.style.use('dark_background')
+		plt.imshow(attributions_array, vmin=0, vmax=1)
+		plt.colorbar()
+		plt.xlabel('Position')
+		plt.ylabel('Sample')
 		plt.savefig('attributions_{0:04d}.png'.format(count), dpi=400)
 		plt.close()
+		return
 
+	def readable_interpretation(self, count, n_observed=100, method='combined', normalized=True, aggregation='average'):
+		"""
+		Generates a heatmap of attribution scores per input element for
+		n_observed inputs
+
+		Args:
+			n_observed: int, number of inputs
+			method: str, one of 'combined', 'gradientxinput', 'occlusion'
+
+		Returns:
+			None (saves matplotlib.pyplot figure)
+
+		"""
+		attributions_arr = []
+
+		for i in range(n_observed):
+			input_tensor = self.input_tensors[i]
+			if method == 'combined':
+				occlusion = self.occlusion(input_tensor)
+				gradxinput = self.gradientxinput(input_tensor)
+				attribution = [(i+j)/2 for i, j in zip(occlusion, gradxinput)]
+
+			elif method == 'gradientxinput':
+				attribution = self.gradientxinput(input_tensor)
+
+			else:
+				attribution = self.occlusion(input_tensor)
+
+			attributions_arr.append(attribution)
+
+		average_arr = []
+		for i in range(len(attributions_arr[0])):
+			average = sum([attribute[i] for attribute in attributions_arr])
+			average_arr.append(average)
+
+		# max-aggregated attributions per field
+		if aggregation == 'max':
+			final_arr = []
+			index = 0
+			for i, field in zip(self.taken_ls, self.fields_ls):
+				max_val = 0
+				for k in range(index, index+i):
+					max_val = max(max_val, average_arr[k])
+				final_arr.append([field, max_val])
+				index += i
+
+		elif aggregation == 'average':
+			final_arr = []
+			index = 0
+			for i, field in zip(self.taken_ls, self.fields_ls):
+				sum_val = 0
+				for k in range(index, index+i):
+					sum_val += average_arr[k]
+				final_arr.append([field, sum_val/k])
+				index += i
+
+		# max-normalize occlusions
+		maximum_attribute = max([i[1] for i in final_arr])
+		if normalized and max(final_arr) != 0:
+			correction_factor = 1 / maximum_attribute
+			final_arr = [i[1]*correction_factor for i in final_arr]
+
+		my_cmap = plt.cm.get_cmap('viridis')
+		colors = my_cmap(final_arr)
+
+		plt.barh(self.fields_ls, final_arr, color=colors, edgecolor='black')
+		plt.yticks(np.arange(0, len(self.fields_ls)),
+				[i for i in self.fields_ls],
+				rotation='horizontal')
+
+		plt.tight_layout()
+		plt.xlabel('Importance')
+		plt.savefig('readable_{}'.format(count), dpi=400)
+		plt.close()
 		return
 
 

@@ -1,10 +1,25 @@
-# fcnet.py
+# transformer_regressor.py
+# Transformer-based neural network for regression and
 
-import numpy as np 
-import pandas as pd 
+# import standard libraries
+import string
+import time
+import math
 import random
-import torch 
+
+# import third-party libraries
+import numpy as np 
+import matplotlib.pyplot as plt 
+import pandas as pd
+from sklearn.utils import shuffle
+
+import torch
 import torch.nn as nn
+from torch.nn import TransformerEncoder, TransformerEncoderLayer
+
+# turn 'value set on df slice copy' warnings off
+pd.options.mode.chained_assignment = None
+
 
 class MultiLayerPerceptron(nn.Module):
 
@@ -21,8 +36,6 @@ class MultiLayerPerceptron(nn.Module):
 		self.hidden2output = nn.Linear(hidden3_size, output_size)
 		self.relu = nn.ReLU()
 		self.dropout = nn.Dropout(0.3)
-		self.softmax = nn.Softmax(dim=1)
-		self.layernorm = nn.LayerNorm()
 
 	def forward(self, input):
 		"""
@@ -35,6 +48,7 @@ class MultiLayerPerceptron(nn.Module):
 			output: torch.Tensor object of size output_size
 
 		"""
+
 		out = self.input2hidden(input)
 		out = self.relu(out)
 		out = self.dropout(out)
@@ -48,111 +62,427 @@ class MultiLayerPerceptron(nn.Module):
 		out = self.dropout(out)
 
 		output = self.hidden2output(out)
-		softout = self.softmax(out)
-
-		return softout 
-
-model = MultiLayerPerceptron(input_size, output_size)
-loss_function = nn.CrossEntropyLoss() # integer labels expected
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+		return output
 
 
-def train_minibatch(input_tensor, output_tensor, optimizer, minibatch_size, model):
-	"""
-	Train a single minibatch
+class Format():
 
-	Args:
-		input_tensor: torch.Tensor object 
-		output_tensor: torch.Tensor object
-		optimizer: torch.optim object
-		minibatch_size: int, number of examples per minibatch
-		model: torch.nn
+	def __init__(self, file, training=True):
 
-	Returns:
-		output: torch.Tensor of model predictions
-		loss.item(): float of loss for that minibatch
+		df = pd.read_csv(file)	
+		df = df.applymap(lambda x: '' if str(x).lower() == 'nan' else x)
+		df = df[:20000]
+		length = len(df['Elapsed Time'])
+		self.input_fields = ['Store Number', 
+							'Market', 
+							'Order Made',
+							'Cost',
+							'Total Deliverers', 
+							'Busy Deliverers', 
+							'Total Orders',
+							'Estimated Transit Time',
+							'Linear Estimation']
 
-	"""
+		if training:
+			df = shuffle(df)
+			df.reset_index(inplace=True)
 
-	output = model(input_tensor)
-	output_tensor = output_tensor.reshape(minibatch_size, 1)
+			# 80/20 training/test split
+			split_i = int(length * 0.8)
 
-	loss = loss_function(output, output_tensor)
-	optimizer.zero_grad() # prevents gradients from adding between minibatches
-	loss.backward()
+			training = df[:][:split_i]
+			self.training_inputs = training[self.input_fields]
+			self.training_outputs = [i for i in training['positive_two'][:]]
 
-	nn.utils.clip_grad_norm_(model.parameters(), 0.3)
-	optimizer.step()
+			validation_size = length - split_i
+			validation = df[:][split_i:split_i + validation_size]
+			self.validation_inputs = validation[self.input_fields]
+			self.validation_outputs = [i for i in validation['positive_two'][:]]
+			self.validation_inputs = self.validation_inputs.reset_index()
 
-	return output, loss.item()
-
-
-def train_model(model, optimizer, minibatch_size=32):
-	"""
-	Train the mlp model
-
-	Args:
-		model: MultiLayerPerceptron object
-		optimizer: torch.optim object
-	kwargs:
-		minibatch_size: int
-
-	Returns:
-		None
-
-	"""
-
-	model.train()
-	epochs = 50
-
-	for epoch in range(epochs):
-		pairs = [[i, j] for i, j in zip(input_tensors, output_tensors)]
-		random.shuffle(pairs)
-		input_tensors = [i[0] for i in pairs]
-		output_tensors = [i[1] for i in pairs]
-		total_loss = 0
-
-		for i in range(0, len(train_input) - minibatch_size, minibatch_size):
-			# stack tensors to make shape (minibatch_size, input_size)
-			input_batch = torch.stack(input_tensors[i:i + minibatch_size])
-			output_batch = torch.stack(output_tensors[i:i + minibatch_size])
-
-			# skip the last batch if too small
-			if len(input_batch) < minibatch_size:
-				break
-
-			output, loss = train_minibatch(input_batch, output_batch, optimizer, minibatch_size, model)
-			total_loss += loss
-
-		print (f'Epoch {epoch} complete: {total_loss} loss')
-
-	return
+		else:
+			self.training_inputs = self.df # not actually training, but matches name for stringify
 
 
-def test_model(test_inputs, test_outputs, model):
-	"""
-	Test the model on the validation set
 
-	Args:
-		test_inputs: torch.Tensor
-		test_outputs: torch.Tensor of expected values
-		model: MultiLayerPerceptron object instance
+	def stringify_input(self, index, training=True):
+		"""
+		Compose array of string versions of relevant information in self.df 
+		Maintains a consistant structure to inputs regardless of missing values.
 
-	Returns:
-		None
+		Args:
+			index: int, position of input
 
-	"""
-	model.eval()
-	correct_count = 0
+		Returns:
+			array: string: str of values in the row of interest
 
-	for i in range(test_inputs):
-		inp = test_inputs[i]
-		output = model(inp)
+		"""
 
-		true_out = test_outputs[i]
-		if output == true_out:
-			correct_count += 1
 
-	print (f'Test complete: {correct_count / len(test_inputs)} accuracy')
-	return
+		taken_ls = [4, 1, 8, 5, 3, 3, 3, 4, 4]
+
+		string_arr = []
+		if training:
+			inputs = self.training_inputs.iloc[index]
+		else:
+			inputs = self.validation_inputs.iloc[index]
+
+		fields_ls = self.input_fields
+		for i, field in enumerate(fields_ls):
+			entry = str(inputs[field])[:taken_ls[i]]
+			while len(entry) < taken_ls[i]:
+				entry += '_'
+			string_arr.append(entry)
+
+		string = ''.join(string_arr)
+		return string
+
+
+	@classmethod
+	def string_to_tensor(self, input_string):
+		"""
+		Convert a string into a tensor
+
+		Args:
+			string: str, input as a string
+
+		Returns:
+			tensor
+		"""
+
+		# TODO: switch to ASCII (upper and lowercase and a few special chars)
+		places_dict = {s:int(s) for s in '0123456789'}
+		places_dict['.'] = 10
+		places_dict[' '] = 11
+		places_dict['-'] = 12
+		places_dict[':'] = 13
+		places_dict['_'] = 14
+
+		# vocab_size x batch_size x embedding dimension (ie input length)
+		tensor_shape = (len(input_string), 1, 15) 
+		tensor = torch.zeros(tensor_shape)
+
+		for i, letter in enumerate(input_string):
+			tensor[i][0][places_dict[letter]] = 1.
+
+		tensor = tensor.flatten()
+		return tensor 
+
+
+	def random_sample(self):
+		"""
+		Choose a random index from a training set
+		
+		"""
+		index = random.randint(0, len(self.training_inputs['store_id']) - 1)
+
+		output = self.training_outputs['etime'][index]
+		output_tensor = torch.tensor(output)
+
+		input_string = self.stringify_inputs(index)
+		input_tensor = self.string_to_tensor(input_string)
+
+		return output, input, output_tensor, input_tensor
+
+
+	def sequential_tensors(self, training=True):
+		"""
+		
+		"""
+
+		input_tensors = []
+		output_tensors = []
+		if training:
+			inputs = self.training_inputs
+			outputs = self.training_outputs
+		else:
+			inputs = self.validation_inputs
+			outputs = self.validation_outputs
+
+		for i in range(len(inputs)):
+			input_string = self.stringify_input(i, training=training)
+			input_tensor = self.string_to_tensor(input_string)
+			input_tensors.append(input_tensor)
+
+			# convert output float to tensor directly
+			output_tensors.append(torch.Tensor([outputs[i]]))
+
+		return input_tensors, output_tensors
+
+
+class ActivateNet:
+
+	def __init__(self, epochs):
+		n_letters = len('0123456789. -:_') # 15 possible characters
+		file = 'data/linear_historical.csv'
+		form = Format(file, training=True)
+		self.input_tensors, self.output_tensors = form.sequential_tensors(training=True)
+		self.validation_inputs, self.validation_outputs = form.sequential_tensors(training=False)
+		self.epochs = epochs
+
+		output_size = 1
+		input_size = len(self.input_tensors[0])
+		self.model = MultiLayerPerceptron(input_size, output_size)
+		self.optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-4)
+		self.biases_arr = [[], []]
+
+	def weighted_mseloss(self, output, target):
+		"""
+		We are told that the true cost of underestimation is twice
+		that of overestimation, so MSEloss is customized accordingly.
+
+		Args:
+			output: torch.tensor
+			target: torch.tensor
+
+		Returns:
+			loss: float
+
+		"""
+		if output < target:
+			loss = torch.mean((2*(output - target))**2)
+		else:
+			loss = torch.mean((output - target)**2)
+
+		return loss
+
+
+	def weighted_l1loss(self, output, target):
+		"""
+		Assigned double the weight to underestimation with L1 cost
+
+		Args:
+			output: torch.tensor
+			target: torch.tensor
+
+		Returns:
+			loss: float
+		"""
+
+		if output < target:
+			loss = abs(2 * (output - target))
+
+		else:
+			loss = abs(output - target)
+
+		return loss
+
+
+	def train_minibatch(self, input_tensor, output_tensor, minibatch_size):
+		"""
+		Train a single minibatch
+
+		Args:
+			input_tensor: torch.Tensor object 
+			output_tensor: torch.Tensor object
+			optimizer: torch.optim object
+			minibatch_size: int, number of examples per minibatch
+			model: torch.nn
+
+		Returns:
+			output: torch.Tensor of model predictions
+			loss.item(): float of loss for that minibatch
+
+		"""
+
+		output = self.model(input_tensor)
+		output_tensor = output_tensor.reshape(minibatch_size, 1)
+		loss_function = torch.nn.L1Loss()
+		loss = loss_function(output, output_tensor)
+
+		self.optimizer.zero_grad() # prevents gradients from adding between minibatches
+		loss.backward()
+
+		nn.utils.clip_grad_norm_(self.model.parameters(), 0.3)
+		self.optimizer.step()
+
+		return output, loss.item()
+
+
+	def plot_predictions(self, epoch_number):
+		"""
+
+		"""
+		self.model.eval() # switch to evaluation mode (silence dropouts etc.)
+		loss = torch.nn.L1Loss()
+		model_outputs = []
+
+		with torch.no_grad():
+			total_error = 0
+			for i in range(len(self.validation_inputs)):
+				input_tensor = self.validation_inputs[i]
+				output_tensor = self.validation_outputs[i]
+				model_output = self.model(input_tensor)
+				model_outputs.append(float(model_output))
+
+		plt.scatter([float(i) for i in self.validation_outputs], model_outputs, s=1.5)
+		plt.axis([0, 1600, -100, 1600]) # x-axis range followed by y-axis range
+		# plt.show()
+		plt.tight_layout()
+		plt.savefig('regression{0:04d}.png'.format(epoch_number), dpi=400)
+		plt.close()
+		return
+
+	def plot_biases(self, index):
+		"""
+
+		"""
+		x, y = self.model.input2hidden2[:2].detach().numpy()
+		self.biases_arr[0].append(x)
+		self.biases_arr[1].append(y)
+		plt.style.use('dark_background')
+		plt.plot(x_arr, y_arr, '^', color='white', alpha=2, markersize=0.1)
+		plt.axis('on')
+		plt.savefig('Biases_{0:04d}.png'.format(index), dpi=400)
+		plt.close()
+		return
+
+
+	def train_model(self, minibatch_size=32):
+		"""
+		Train the mlp model
+
+		Args:
+			model: MultiLayerPerceptron object
+			optimizer: torch.optim object
+			minibatch_size: int
+
+		Returns:
+			None
+
+		"""
+
+		self.model.train()
+		epochs = self.epochs
+		count = 0
+		for epoch in range(epochs):
+			pairs = [[i, j] for i, j in zip(self.input_tensors, self.output_tensors)]
+			random.shuffle(pairs)
+			input_tensors = [i[0] for i in pairs]
+			output_tensors = [i[1] for i in pairs]
+			total_loss = 0
+
+			for i in range(0, len(input_tensors) - minibatch_size, minibatch_size):
+				# stack tensors to make shape (minibatch_size, input_size)
+				input_batch = torch.stack(input_tensors[i:i + minibatch_size])
+				output_batch = torch.stack(output_tensors[i:i + minibatch_size])
+
+				# skip the last batch if too small
+				if len(input_batch) < minibatch_size:
+					break
+
+				output, loss = self.train_minibatch(input_batch, output_batch, minibatch_size)
+				total_loss += loss
+				if i % 100 == 0:
+					print (f'Epoch {epoch} complete: {total_loss} loss')
+					self.plot_predictions(count)
+					count += 1
+
+		return
+
+
+	def train_online(self, file, minibatch_size=1):
+		"""
+		On-line training with random samples
+
+		Args:
+			model: Transformer object
+			optimizer: torch.optim object of choice
+
+		kwags:
+			minibatch_size: int, number of samples per gradient update
+
+		Return:
+			none (modifies model in-place)
+
+		"""
+
+		self.model.train()
+		current_loss = 0
+		training_data = Format(file, training=True)
+
+		# training iteration and epoch number specs
+		n_epochs = 10
+
+		start = time.time()
+		for i in range(n_epochs):
+			random.shuffle(input_samples)
+			for i in range(0, len(self.input_samples), minibatch_size):
+				if len(input_samples) - i < minibatch_size:
+					break
+
+				input_tensor = torch.cat([input_samples[i+j] for j in range(minibatch_size)])
+				output_tensor = torch.cat([output_samples[i+j] for j in range(minibatch_size)])
+
+				# define the output and backpropegate loss
+				output, loss = train_random_input(output_tensor, input_tensor)
+
+				# sum to make total loss
+				current_loss += loss 
+
+				if i % n_per_epoch == 0 and i > 0:
+					etime = time.time() - start
+					ave_error = round(current_loss / n_per_epoch, 2)
+					print (f'Epoch {i//n_per_epoch} complete \n Average error: {ave_error} \n Elapsed time: {round(etime, 2)}s \n' + '~'*30)
+					current_loss = 0
+
+		return
+
+
+	def test_model(self):
+		"""
+
+		"""
+
+		self.model.eval() # switch to evaluation mode (silence dropouts etc.)
+		loss = torch.nn.L1Loss()
+
+		with torch.no_grad():
+			total_error = 0
+			for i in range(len(self.validation_inputs)):
+				input_tensor = self.validation_inputs[i]
+				output_tensor = self.validation_outputs[i]
+				model_output = self.model(input_tensor)
+				total_error += loss(model_output, output_tensor).item()
+
+		print (f'Average Absolute Error: {round(total_error / len(validation_inputs), 2)}')
+		return
+
+
+	def predict(self, model, test_inputs):
+		"""
+		Make predictions with a model.
+
+		Args:
+			model: Transformer() object
+			test_inputs: torch.tensor inputs of prediction desired
+
+		Returns:
+			prediction_array: arr[int] of model predictions
+
+		"""
+		model.eval()
+		prediction_array = []
+
+		with torch.no_grad():
+			for i in range(len(test_inputs['index'])):
+				prediction_array.append(model_output)
+
+
+		return prediction_array
+
+
+network = ActivateNet(200)
+network.train_model()
+network.test_model()
+
+
+
+
+
+
+
+
+
+
 

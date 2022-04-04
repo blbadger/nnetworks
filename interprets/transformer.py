@@ -37,38 +37,14 @@ class Transformer(nn.Module):
 
 		super().__init__()
 		self.posencoder = PositionalEncoding(d_model, dropout)
-
-		encoder_layers = TransformerEncoderLayer(d_model, nhead, feedforward_size, dropout)
-		self.transformer_encoder = TransformerEncoder(encoder_layers, nlayers)
-
-		self.encoder = nn.Embedding(n_letters, d_model)
 		self.d_model = d_model
-		self.init_weights()
-		self.transformer2hidden = nn.Linear(n_letters * 54, 50)
+		encoder_layers = TransformerEncoderLayer(d_model, nhead, feedforward_size, dropout, batch_first=True)
+		self.transformer_encoder = TransformerEncoder(encoder_layers, nlayers)
+		self.transformer2hidden = nn.Linear(n_letters * d_model, 50)
 		self.hidden2output = nn.Linear(50, 1)
 		self.relu = nn.ReLU()
 		self.n_letters = n_letters
 		self.minibatch_size = minibatch_size
-
-
-	def init_weights(self):
-		"""
-		Uniform distribution weight initialization for transformer encoder
-
-		Args:
-			None
-
-		Returns:
-			None (initializes self.encoder.weight in-place)
-
-		"""
-
-		initrange = 0.2
-
-		# in-place assignment of initialization to uniform distribution with range 2*initrange
-		self.encoder.weight.data.uniform_(-initrange, initrange)
-		return
-
 
 	def forward(self, input_tensor):
 		"""
@@ -81,14 +57,11 @@ class Transformer(nn.Module):
 			output: torch.Tensor, linear output
 		"""
 
-		# reshape input: sequence size x batch size x embedding dimension
-		length = len(input_tensor)
-		input = input_tensor.reshape(length, self.minibatch_size, self.n_letters)
-
 		# apply (relative) positional encoding
-		input = self.posencoder(input)
-		output = self.transformer_encoder(input)
-		output = output.reshape(self.minibatch_size, length, self.n_letters)
+		input_encoded = self.posencoder(input_tensor)
+		output = self.transformer_encoder(input_encoded)
+
+		# output shape: same as input (batch size x sequence size x embedding dimension)
 		output = torch.flatten(output, start_dim=1)
 		output = self.transformer2hidden(output)
 		output = self.relu(output)
@@ -140,7 +113,7 @@ class PositionalEncoding(nn.Module):
 			tensor = tensor + self.arr[:tensor.size(0), :, :]
 
 		else:
-			tensor = tensor + self.arr[:tensor.size(0), :, :-1] # decrement to prevent oob
+			tensor = tensor + self.arr[:tensor.size(0), :, :-1] # -1 ending to prevent oob
 
 		dout = self.dropout(tensor)
 		return dout
@@ -208,7 +181,7 @@ def weighted_l1loss(output, target):
 	return loss
 
 
-def init_transformer(n_letters, minibatch_size):
+def init_transformer(embedding_dim, minibatch_size, line_length):
 	"""
 	Initialize a transformer model
 
@@ -225,9 +198,9 @@ def init_transformer(n_letters, minibatch_size):
 	feedforward_size = 280
 	nlayers = 3
 	nhead = 5
-	d_model = n_letters
+	d_model = embedding_dim
+	n_letters = line_length
 	n_output = 1
-
 	model = Transformer(n_output, n_letters, d_model, nhead, feedforward_size, nlayers, minibatch_size)
 	return model
 
@@ -248,7 +221,7 @@ def train_minibatch(input_tensor, output_tensor, optimizer, minibatch_size, mode
 		loss.item(): float of loss for that minibatch
 
 	"""
-
+	model.train()
 	output = model(input_tensor)
 	output_tensor = output_tensor.reshape(minibatch_size, 1)
 
@@ -261,17 +234,43 @@ def train_minibatch(input_tensor, output_tensor, optimizer, minibatch_size, mode
 
 	return output, loss.item()
 
-# TODO: switch possible characters to ascii
-n_letters = len('0123456789. -:_')
-file = 'data/linear_historical.csv'
-input_tensors = Format(file, 'Elapsed Time')
+def plot_predictions(model, validation_inputs, validation_outputs, count):
+	"""
+	Plot
 
-input_arr, output_arr = input_tensors.transform_to_tensors()
-line_length = len(input_arr[0]) // n_letters
+	"""
+	model.eval() # switch to evaluation mode (silence dropouts etc.)
+	model_outputs = []
+
+	with torch.no_grad():
+		total_error = 0
+		for i in range(len(validation_inputs)):
+			input_tensor = validation_inputs[i]
+			input_tensor = input_tensor.reshape(1, len(input_tensor), len(input_tensor[0]))
+			output_tensor = validation_outputs[i]
+			model_output = model(input_tensor)
+			model_outputs.append(float(model_output))
+
+	plt.scatter([float(i) for i in validation_outputs], model_outputs, s=1.5)
+	plt.axis([0, 1600, -100, 1600]) # x-axis range followed by y-axis range
+	# plt.show()
+	plt.tight_layout()
+	plt.savefig('regression{0:04d}.png'.format(count), dpi=400)
+	plt.close()
+	return
+
+# TODO: switch possible characters to ascii
+embedding_dim = len('0123456789. -:_')
+file = 'data/linear_historical.csv'
+input_tensors = Format(file, 'positive_control')
+
+input_arr, output_arr = input_tensors.transform_to_tensors(training=True, flatten=False)
+test_inputs, test_outputs = input_tensors.transform_to_tensors(training=False, flatten=False)
+line_length = len(input_arr[0])
 minibatch_size = 32
-model = init_transformer(n_letters, minibatch_size)
+model = init_transformer(embedding_dim, minibatch_size, line_length)
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
-file = 'linear_historical.csv'
+file = 'data/linear_historical.csv'
 loss_function = nn.L1Loss()
 
 
@@ -292,7 +291,8 @@ def train_model(model, input_tensors, output_tensors, optimizer, minibatch_size)
 	"""
 
 	model.train()
-	epochs = 50
+	epochs = 200
+	count = 0
 
 	for epoch in range(epochs):
 		pairs = [[i, j] for i, j in zip(input_tensors, output_tensors)]
@@ -310,13 +310,16 @@ def train_model(model, input_tensors, output_tensors, optimizer, minibatch_size)
 			if len(input_batch) < minibatch_size:
 				break
 
-			# default tensor size sequence_len x batch_size x embedding_size
-			input_batch = input_batch.reshape(line_length, minibatch_size, n_letters)
+			# tensor shape: batch_size x sequence_len x embedding_size
 			output, loss = train_minibatch(input_batch, output_batch, optimizer, minibatch_size, model)
 			total_loss += loss
+			count += 1
+			if count % 25 == 0: # plot every 23 epochs for minibatch size of 32
+				plot_predictions(model, test_inputs, test_outputs, count//25)
+
 
 		print (f'Epoch {epoch} complete: {total_loss} loss')
-
+		
 	return
 
 
@@ -351,7 +354,7 @@ def evaluate_network(model):
 
 	model.eval() # switch to evaluation mode (silence dropouts etc.)
 	count = 0
-	validation_data = Format(file, training=True)
+	validation_data = Format(file, 'positive_control')
 
 	with torch.no_grad():
 		total_error = 0
@@ -389,7 +392,7 @@ train_model(model, input_arr, output_arr, optimizer, minibatch_size)
 
 # model.load_state_dict(torch.load('transformer.pth'))
 
-# evaluate_network(model)
+evaluate_network(model)
 
 
 def predict(model, file):
@@ -407,12 +410,11 @@ def predict(model, file):
 
 	model.eval()
 	prediction_array = []
-	test_data = Format(file, training=False)
+	test_data = Format(file)
 	test_inputs = test_data.generate_test_inputs()
 
 	with torch.no_grad():
 		for i, input_tensor in enumerate(test_data.generate_test_inputs()):
-
 			output = model(input_tensor)
 			linear_output = test_data.test_inputs['linear_ests'][i]
 

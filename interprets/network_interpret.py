@@ -22,7 +22,7 @@ class StaticInterpret:
 						'Estimated Transit Time',
 						'Linear Estimation']
 		self.embedding_dim = 15
-		self.taken_ls = [4, 1, 15, 4, 4, 4, 4, 4, 4]
+		self.taken_ls = [4, 1, 15, 5, 4, 4, 4, 4, 4]
 
 
 	def occlusion(self, input_tensor, occlusion_size=2):
@@ -154,7 +154,7 @@ class StaticInterpret:
 				maximum_attribute = max(row)
 				correction_factor = 1 / maximum_attribute
 				attributions_array[i] = [j*correction_factor for j in row]
-				
+
 		plt.style.use('dark_background')
 		plt.imshow(attributions_array, vmin=0, vmax=1)
 		plt.colorbar()
@@ -203,22 +203,22 @@ class StaticInterpret:
 		if aggregation == 'max':
 			final_arr = []
 			index = 0
-			for i, field in zip(self.taken_ls, self.fields_ls):
+			for c, field in zip(self.taken_ls, self.fields_ls):
 				max_val = 0
-				for k in range(index, index+i):
+				for k in range(index, index + c):
 					max_val = max(max_val, average_arr[k])
 				final_arr.append([field, max_val])
-				index += i
+				index += c
 
 		elif aggregation == 'average':
 			final_arr = []
 			index = 0
-			for i, field in zip(self.taken_ls, self.fields_ls):
+			for c, field in zip(self.taken_ls, self.fields_ls):
 				sum_val = 0
-				for k in range(index, index+i):
+				for k in range(index, index + c):
 					sum_val += average_arr[k]
-				final_arr.append([field, sum_val/k])
-				index += i
+				final_arr.append([field, sum_val/c])
+				index += c
 
 		# max-normalize occlusions
 		maximum_attribute = max([i[1] for i in final_arr])
@@ -226,9 +226,9 @@ class StaticInterpret:
 			correction_factor = 1 / maximum_attribute
 			final_arr = [i[1]*correction_factor for i in final_arr]
 
+		plt.style.use('dark_background')
 		my_cmap = plt.cm.get_cmap('viridis')
 		colors = my_cmap(final_arr)
-
 		plt.barh(self.fields_ls, final_arr, color=colors, edgecolor='black')
 		plt.yticks(np.arange(0, len(self.fields_ls)),
 				[i for i in self.fields_ls],
@@ -236,7 +236,7 @@ class StaticInterpret:
 
 		plt.tight_layout()
 		plt.xlabel('Importance')
-		plt.savefig('readable_{}'.format(count), dpi=400)
+		plt.savefig('readable_{}'.format(count), dpi=400, bbox_inches='tight')
 		plt.close()
 		return
 
@@ -266,6 +266,17 @@ class StaticInterpret:
 			plt.close()
 
 		return
+
+
+
+
+
+
+
+
+
+
+
 
 
 class Interpret:

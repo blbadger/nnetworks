@@ -9,8 +9,10 @@ import random
 import numpy as np 
 import matplotlib.pyplot as plt 
 import pandas as pd
+import scipy
 from sklearn.utils import shuffle
-import PrettyTable
+from prettytable import PrettyTable
+from scipy.interpolate import make_interp_spline
 
 import torch
 import torch.nn as nn
@@ -72,7 +74,7 @@ class Format:
 
 		df = pd.read_csv(file)	
 		df = df.applymap(lambda x: '' if str(x).lower() == 'nan' else x)
-		df = df[:10000]
+		df = df[:20000]
 		length = len(df['Elapsed Time'])
 		self.input_fields = ['Store Number', 
 							'Market', 
@@ -93,12 +95,12 @@ class Format:
 
 			training = df[:][:split_i]
 			self.training_inputs = training[self.input_fields]
-			self.training_outputs = [i for i in training['positive_control'][:]]
+			self.training_outputs = [i for i in training['positive_two'][:]]
 
 			validation_size = length - split_i
 			validation = df[:][split_i:split_i + validation_size]
 			self.validation_inputs = validation[self.input_fields]
-			self.validation_outputs = [i for i in validation['positive_control'][:]]
+			self.validation_outputs = [i for i in validation['positive_two'][:]]
 			self.validation_inputs = self.validation_inputs.reset_index()
 
 		else:
@@ -117,9 +119,8 @@ class Format:
 			array: string: str of values in the row of interest
 
 		"""
-
-
-		taken_ls = [4, 1, 15, 4, 4, 4, 4, 4, 4]
+		
+		taken_ls = [4, 1, 8, 5, 3, 3, 3, 4, 4]
 
 		string_arr = []
 		if training:
@@ -320,7 +321,7 @@ class ActivateNet:
 			loss.item(): float of loss for that minibatch
 
 		"""
-
+		# self.model.train()
 		output = self.model(input_tensor)
 		output_tensor = output_tensor.reshape(minibatch_size, 1)
 		loss_function = torch.nn.L1Loss()
@@ -341,7 +342,6 @@ class ActivateNet:
 
 		"""
 		self.model.eval() # switch to evaluation mode (silence dropouts etc.)
-		loss = torch.nn.L1Loss()
 		model_outputs = []
 
 		with torch.no_grad():
@@ -353,6 +353,8 @@ class ActivateNet:
 				model_outputs.append(float(model_output))
 
 		plt.scatter([float(i) for i in self.validation_outputs], model_outputs, s=1.5)
+		_, _, r2, _, _ = scipy.stats.linregress([float(i) for i in self.validation_outputs], model_outputs)
+		print (f'R2 value: {r2}')
 		plt.axis([0, 1600, -100, 1600]) # x-axis range followed by y-axis range
 		# plt.show()
 		plt.tight_layout()
@@ -475,10 +477,6 @@ class ActivateNet:
 			total_loss = 0
 
 			for i in range(0, len(input_tensors) - minibatch_size, minibatch_size):
-
-				# stack tensors to make shape (minibatch_size, input_size)
-				if i == len(input_tensors) - minibatch_size:
-					break
 				input_batch = torch.stack(input_tensors[i:i + minibatch_size])
 				output_batch = torch.stack(output_tensors[i:i + minibatch_size])
 
@@ -488,14 +486,15 @@ class ActivateNet:
 
 				output, loss = self.train_minibatch(input_batch, output_batch, minibatch_size)
 				total_loss += loss
-				if i % 100 == 0:
-					# self.heatmap_weights(count)
-					input_tensors, output_tensors = self.validation_inputs, self.validation_outputs
-					model = self.model
-					interpret = StaticInterpret(model, input_tensors, output_tensors)
-					interpret.heatmap(count, method='occlusion')
+				if i % 200 == 0: # plot every 23 epochs for minibatch size of 32
+					# interpret = StaticInterpret(self.model, self.validation_inputs, self.validation_outputs)
+					
+					# interpret.heatmap(count, method='combined')
 					count += 1
+
 			print (f'Epoch {epoch} complete: {total_loss} loss')
+			self.plot_predictions(count)
+			# self.test_model()
 
 		return
 
@@ -523,7 +522,17 @@ class ActivateNet:
 				model_output = self.model(input_tensor)
 				total_error += loss(model_output, output_tensor).item()
 
-		print (f'Average Absolute Error: {round(total_error / len(self.validation_inputs), 2)}')
+		print (f'Test Average Absolute Error: {round(total_error / len(self.validation_inputs), 2)}')
+
+		with torch.no_grad():
+			total_error = 0
+			for i in range(len(self.input_tensors[:2000])):
+				input_tensor = self.input_tensors[i]
+				output_tensor = self.output_tensors[i]
+				model_output = self.model(input_tensor)
+				total_error += loss(model_output, output_tensor).item()
+
+		print (f'Training Average Absolute Error: {round(total_error / len(self.validation_inputs), 2)}')
 		return
 
 
@@ -546,7 +555,6 @@ class ActivateNet:
 			for i in range(len(test_inputs['index'])):
 				prediction_array.append(model_output)
 
-
 		return prediction_array
 
 
@@ -554,11 +562,12 @@ network = ActivateNet(200)
 network.train_model()
 network.test_model()
 
-# input_tensors, output_tensors = network.validation_inputs, network.validation_outputs
-# model = network.model
-# interpret = StaticInterpret(model, input_tensors, output_tensors)
-# interpret.readable_interpretation(1, method='combined')
-# interpret.heatmap(1)
+input_tensors, output_tensors = network.validation_inputs, network.validation_outputs
+print (input_tensors[0].shape)
+model = network.model
+interpret = StaticInterpret(model, input_tensors, output_tensors)
+interpret.readable_interpretation(1, method='average')
+interpret.heatmap(1)
 
 
 

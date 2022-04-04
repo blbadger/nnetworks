@@ -11,35 +11,27 @@ import numpy as np
 
 class Format:
 
-	def __init__(self, file, prediction_feature, training=True):
+	def __init__(self, file, prediction_feature):
 
 		df = pd.read_csv(file)	
-		df = df.applymap(lambda x: '' if str(x).lower()[0] == 'n' else x)
+		df = df.applymap(lambda x: '' if str(x).lower()[0] == 'nan' else x)
 		df = df[:][:10000]
-		length = len(df[:])
-		field_of_interest = prediction_feature
 		self.prediction_feature = prediction_feature
 
-		if training:
-			# 80/20 training/test split and formatting
-			split_i = int(length * 0.8)
+		# 80/20 training/test split and formatting
+		length = len(df[:])
+		split_i = int(length * 0.8)
+		training = df[:][:split_i]
+		self.training_inputs = training[[i for i in training.columns if i != prediction_feature]]
+		self.training_outputs = training[[prediction_feature]]
 
-			training = df[:][:split_i]
-			self.training_inputs = training[[i for i in training.columns if i != prediction_feature]]
-			self.training_outputs = training[[prediction_feature]]
+		validation_size = length - split_i
+		validation = df[:][split_i:split_i + validation_size]
 
-			validation_size = length - split_i
-			validation = df[:][split_i:split_i + validation_size]
-			self.val_inputs = validation[[i for i in validation.columns if i != prediction_feature]]
-			self.val_outputs = validation[[prediction_feature]]
-
-			self.sequential_count = 0
-			self.val_inputs.reset_index(inplace=True)
-			self.val_outputs.reset_index(inplace=True)
-
-		else:
-			self.test_inputs = df 
-
+		self.val_inputs = validation[[i for i in validation.columns if i != prediction_feature]]
+		self.val_outputs = validation[[prediction_feature]]
+		self.val_inputs.reset_index(inplace=True, drop=True)
+		self.val_outputs.reset_index(inplace=True, drop=True)
 
 
 	def stringify_input(self, input_type='training', short=True, n_taken=4, remove_spaces=True):
@@ -73,19 +65,20 @@ class Format:
 		else:
 			inputs = inputs.applymap(lambda x:'_'*n_taken if str(x) in ['', '(null)'] else str(x))
 
-		inputs = inputs.applymap(lambda x: '_'*(n_taken-len(x)) + x)
+		inputs = inputs.applymap(lambda x: '_'*(n_taken - len(x)) + x)
 		string_arr = inputs.apply(lambda x: '_'.join(x.astype(str)), axis=1)
 
 		return string_arr
 
 
 	@classmethod
-	def string_to_tensor(self, string):
+	def string_to_tensor(self, string, flatten):
 		"""
 		Convert a string into a tensor
 
 		Args:
 			string: arr[str]
+			flatten: bool, if True then tensor has dim [1 x length]
 
 		Returns:
 			tensor: torch.Tensor
@@ -101,52 +94,36 @@ class Format:
 		for i, letter in enumerate(string):
 			tensor[i][places_dict[letter]] = 1.
 
-		tensor = torch.flatten(tensor)
+		if flatten:
+			tensor = torch.flatten(tensor)
 		return tensor
 
 
-	def transform_to_tensors(self):
+	def transform_to_tensors(self, training=True, flatten=True):
 		"""
 		Transform input and outputs to arrays of tensors
 
+		kwargs:
+			flatten: bool, if True then tensors are of dim [1 x length]
+
 		"""
+
+		if training:
+			string_arr = self.stringify_input(input_type='training')
+			outputs = self.training_outputs
+
+		else:
+			string_arr = self.stringify_input(input_type='validation')
+			outputs = self.val_outputs
 
 		input_arr, output_arr = [], []
-		string_arr = self.stringify_input()
-		for i in range(len(self.training_outputs[self.prediction_feature])):
-			if self.training_outputs[self.prediction_feature][i]:
+		for i in range(len(string_arr)):
+			if outputs[self.prediction_feature][i]:
 				string = string_arr[i]
-				input_arr.append(self.string_to_tensor(string))
-				output_arr.append(torch.tensor(self.training_outputs[self.prediction_feature][i]))
+				input_arr.append(self.string_to_tensor(string, flatten))
+				output_arr.append(torch.tensor(outputs[self.prediction_feature][i]))
 
 		return input_arr, output_arr
-
-
-	def validation(self):
-		"""
-		Choose one example from the test set, such that repeated
-		choices iterate over the entire set.
-
-		Args:
-			None
-
-		Returns:
-			output: float
-			input str
-			output_tensor: torch.Tensor()
-			input_tensor: torch.Tensor()
-
-		"""
-
-		index = self.sequential_count
-		output = self.val_outputs['etime'][index]
-		output_tensor = torch.tensor(output)
-
-		input_string = self.stringify_input(index, training=False)
-		input_tensor = self.string_to_tensor(input_string)
-		self.sequential_count += 1
-
-		return output, input, output_tensor, input_tensor
 
 
 	def generate_test_inputs(self):

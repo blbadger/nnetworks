@@ -9,6 +9,7 @@ import random
 
 # import third-party libraries
 import numpy as np 
+import matplotlib
 import matplotlib.pyplot as plt 
 import pandas as pd
 from sklearn.utils import shuffle
@@ -71,7 +72,7 @@ class Format():
 
 		df = pd.read_csv(file)	
 		df = df.applymap(lambda x: '' if str(x).lower() == 'nan' else x)
-		df = df[:20000]
+		df = df[:10000]
 		length = len(df['Elapsed Time'])
 		self.input_fields = ['Store Number', 
 							'Market', 
@@ -92,12 +93,12 @@ class Format():
 
 			training = df[:][:split_i]
 			self.training_inputs = training[self.input_fields]
-			self.training_outputs = [i for i in training['positive_two'][:]]
+			self.training_outputs = [i for i in training['positive_control'][:]]
 
 			validation_size = length - split_i
 			validation = df[:][split_i:split_i + validation_size]
 			self.validation_inputs = validation[self.input_fields]
-			self.validation_outputs = [i for i in validation['positive_two'][:]]
+			self.validation_outputs = [i for i in validation['positive_control'][:]]
 			self.validation_inputs = self.validation_inputs.reset_index()
 
 		else:
@@ -223,7 +224,7 @@ class ActivateNet:
 		output_size = 1
 		input_size = len(self.input_tensors[0])
 		self.model = MultiLayerPerceptron(input_size, output_size)
-		self.optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-4)
+		self.optimizer = torch.optim.SGD(self.model.parameters(), lr=1e-1)
 		self.biases_arr = [[], []]
 
 	def weighted_mseloss(self, output, target):
@@ -327,7 +328,7 @@ class ActivateNet:
 		"""
 
 		"""
-		x, y = self.model.input2hidden2[:2].detach().numpy()
+		x, y = self.model.hidden2hidden2[:2].detach().numpy()
 		self.biases_arr[0].append(x)
 		self.biases_arr[1].append(y)
 		plt.style.use('dark_background')
@@ -337,8 +338,109 @@ class ActivateNet:
 		plt.close()
 		return
 
+	def quiver_gradients(self, index, input_tensor, output_tensor, minibatch_size=64):
+		"""
 
-	def train_model(self, minibatch_size=32):
+		"""
+		self.model.eval()
+		x, y = self.model.hidden2hidden.bias[:2].detach().numpy()
+		print (x, y)
+		plt.style.use('dark_background')
+
+		x_arr = np.arange(x - 0.01, x + 0.01, 0.001)
+		y_arr = np.arange(y - 0.01, y + 0.01, 0.001)
+
+		XX, YY = np.meshgrid(x_arr, y_arr)
+		dx, dy = np.meshgrid(x_arr, y_arr) # copy that will be overwritten
+		for i in range(len(x_arr)):
+			for j in range(len(y_arr)):
+				with torch.no_grad():
+					self.model.hidden2hidden.bias[0] = torch.nn.Parameter(torch.Tensor([x_arr[i]]))
+					self.model.hidden2hidden.bias[1] = torch.nn.Parameter(torch.Tensor([y_arr[j]]))
+				output = self.model(input_tensor)
+				output_tensor = output_tensor.reshape(minibatch_size, 1)
+				loss_function = torch.nn.L1Loss()
+				loss = loss_function(output, output_tensor)
+				self.optimizer.zero_grad()
+				loss.backward()
+				dx[j][i], dy[j][i] = self.model.hidden2hidden.bias.grad[:2]
+
+		matplotlib.rcParams.update({'font.size': 8})
+		color_array = 2*(np.abs(dx) + np.abs(dy))
+		plt.quiver(XX, YY, dx, dy, color_array)
+		plt.plot(x, y, 'o', markersize=1)
+		plt.savefig('quiver_{0:04d}.png'.format(index), dpi=400)
+		plt.close()
+		with torch.no_grad():
+			self.model.hidden2hidden.bias[:2] = torch.Tensor([x, y])
+		return
+
+	def quiver_gradients_double(self, index, input_tensor, output_tensor, minibatch_size=64):
+		"""
+
+		"""
+		self.model.eval()
+		x, y = self.model.hidden2hidden.bias[:2].detach().numpy()
+		x_arr = np.arange(x - 0.1, x + 0.1, 0.02)
+		y_arr = np.arange(y - 0.1, y + 0.1, 0.01)
+
+		XX, YY = np.meshgrid(x_arr, y_arr)
+		dx, dy = np.meshgrid(x_arr, y_arr) # copy that will be overwritten
+		for i in range(len(x_arr)):
+			for j in range(len(y_arr)):
+				with torch.no_grad():
+					self.model.hidden2hidden.bias[0] = torch.nn.Parameter(torch.Tensor([x_arr[i]]))
+					self.model.hidden2hidden.bias[1] = torch.nn.Parameter(torch.Tensor([y_arr[j]]))
+				output = self.model(input_tensor)
+				output_tensor = output_tensor.reshape(minibatch_size, 1)
+				loss_function = torch.nn.L1Loss()
+				loss = loss_function(output, output_tensor)
+				self.optimizer.zero_grad()
+				loss.backward()
+				dx[j][i], dy[j][i] = self.model.hidden2hidden.bias.grad[:2]
+
+		x2, y2 = self.model.hidden2hidden2.bias[:2].detach().numpy()
+
+		x_arr2 = np.arange(x2 - 0.1, x2 + 0.1, 0.02)
+		y_arr2 = np.arange(y2 - 0.1, y2 + 0.1, 0.01)
+
+		XX2, YY2 = np.meshgrid(x_arr2, y_arr2)
+		dx2, dy2 = np.meshgrid(x_arr2, y_arr2) # copy that will be overwritten
+		for i in range(len(x_arr2)):
+			for j in range(len(y_arr2)):
+				with torch.no_grad():
+					self.model.hidden2hidden2.bias[0] = torch.nn.Parameter(torch.Tensor([x_arr2[i]]))
+					self.model.hidden2hidden2.bias[1] = torch.nn.Parameter(torch.Tensor([y_arr2[j]]))
+				output = self.model(input_tensor)
+				output_tensor = output_tensor.reshape(minibatch_size, 1)
+				loss_function = torch.nn.L1Loss()
+				loss = loss_function(output, output_tensor)
+				self.optimizer.zero_grad()
+				loss.backward()
+				dx2[j][i], dy2[j][i] = self.model.hidden2hidden2.bias.grad[:2]
+
+		
+		color_array = 2*(np.abs(dx) + np.abs(dy))
+		matplotlib.rcParams.update({'font.size': 7})
+		plt.style.use('dark_background')
+		plt.subplot(1, 2, 1)
+		plt.quiver(XX, YY, dx, dy, color_array)
+		plt.title('Hidden Layer 1')
+
+		plt.subplot(1, 2, 2)
+		color_array2 = 2*(np.abs(dx2) + np.abs(dy2))
+		plt.quiver(XX2, YY2, dx2, dy2, color_array2)
+		plt.title('Hidden Layer 2')
+		plt.savefig('quiver_{0:04d}.png'.format(index), dpi=400)
+		plt.close()
+
+		with torch.no_grad():
+			self.model.hidden2hidden.bias[:2] = torch.Tensor([x, y])
+			self.model.hidden2hidden2.bias[:2] = torch.Tensor([x2, y2])
+		return
+
+
+	def train_model(self, minibatch_size=64):
 		"""
 		Train the mlp model
 
@@ -356,6 +458,7 @@ class ActivateNet:
 		epochs = self.epochs
 		count = 0
 		for epoch in range(epochs):
+			print (epoch)
 			pairs = [[i, j] for i, j in zip(self.input_tensors, self.output_tensors)]
 			random.shuffle(pairs)
 			input_tensors = [i[0] for i in pairs]
@@ -370,12 +473,11 @@ class ActivateNet:
 				# skip the last batch if too small
 				if len(input_batch) < minibatch_size:
 					break
-
 				output, loss = self.train_minibatch(input_batch, output_batch, minibatch_size)
 				total_loss += loss
-				if i % 100 == 0:
+				if i % 1 == 0:
 					print (f'Epoch {epoch} complete: {total_loss} loss')
-					self.plot_predictions(count)
+					self.quiver_gradients(count, input_batch, output_batch)
 					count += 1
 
 		return

@@ -239,7 +239,7 @@ def plot_predictions(model, validation_inputs, validation_outputs, count):
 	Plot
 
 	"""
-	model.eval() # switch to evaluation mode (silence dropouts etc.)
+	
 	model_outputs = []
 
 	with torch.no_grad():

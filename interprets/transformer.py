@@ -12,10 +12,12 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from sklearn.utils import shuffle
 from statsmodels.formula.api import ols
+from prettytable import PrettyTable
 
 import torch
 import torch.nn as nn
 from torch.nn import TransformerEncoder, TransformerEncoderLayer
+import matplotlib
 
 # import custom libraries
 from network_interpret import Interpret 
@@ -76,7 +78,7 @@ class PositionalEncoding(nn.Module):
 	Encodes relative positional information on the input
 	"""
 
-	def __init__(self, model_size, dropout=0.3, max_len = 1000):
+	def __init__(self, model_size, dropout=0.3, max_len=1000):
 
 		super().__init__()
 		self.dropout = nn.Dropout(dropout)
@@ -273,6 +275,84 @@ optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 file = 'data/linear_historical.csv'
 loss_function = nn.L1Loss()
 
+def count_parameters(model):
+	"""
+	Display the tunable parameters in the model of interest
+
+	Args:
+		model: torch.nn object
+
+	Returns:
+		total_params: the number of model parameters
+
+	"""
+
+	table = PrettyTable(['Modules', 'Parameters'])
+	total_params = 0
+	for name, parameter in model.named_parameters():
+		if not parameter.requires_grad:
+			continue
+		param = parameter.numel()
+		table.add_row([name, param])
+		total_params += param 
+
+	print (table)
+	print (f'Total trainable parameters: {total_params}')
+	return total_params
+
+print (count_parameters(model))
+
+def quiver_gradients(index, model, input_tensor, output_tensor, minibatch_size=32):
+		"""
+		Plot a quiver map of the gradients of a chosen layer's parameters
+
+		Args:
+			index: int, current training iteration
+			model: pytorch transformer model
+			input_tensor: torch.Tensor object
+			output_tensor: torch.Tensor object
+		kwargs:
+			minibatch_size: int, size of minibatch
+
+		Returns:
+			None (saves matplotlib pyplot figure)
+		"""
+		model.eval()
+		layer = model.transformer_encoder.layers[0]
+		x, y = layer.linear1.bias[:2].detach().numpy()
+		print (x, y)
+		plt.style.use('dark_background')
+
+		x_arr = np.arange(x - 0.01, x + 0.01, 0.001)
+		y_arr = np.arange(y - 0.01, y + 0.01, 0.001)
+
+		XX, YY = np.meshgrid(x_arr, y_arr)
+		dx, dy = np.meshgrid(x_arr, y_arr) # copy that will be overwritten
+		for i in range(len(x_arr)):
+			for j in range(len(y_arr)):
+				with torch.no_grad():
+					layer.linear1.bias[0] = torch.nn.Parameter(torch.Tensor([x_arr[i]]))
+					layer.linear1.bias[1] = torch.nn.Parameter(torch.Tensor([y_arr[j]]))
+				model.transformer_encoder.layers[0] = layer
+				output = model(input_tensor)
+				output_tensor = output_tensor.reshape(minibatch_size, 1)
+				loss_function = torch.nn.L1Loss()
+				loss = loss_function(output, output_tensor)
+				optimizer.zero_grad()
+				loss.backward()
+				layer = model.transformer_encoder.layers[0]
+				dx[j][i], dy[j][i] = layer.linear1.bias.grad[:2]
+
+		matplotlib.rcParams.update({'font.size': 8})
+		color_array = 2*(np.abs(dx) + np.abs(dy))
+		plt.quiver(XX, YY, dx, dy, color_array)
+		plt.plot(x, y, 'o', markersize=1)
+		plt.savefig('quiver_{0:04d}.png'.format(index), dpi=400)
+		plt.close()
+		with torch.no_grad():
+			model.transformer_encoder.layers[0].linear1.bias.grad[:2] = torch.Tensor([x, y])
+		return
+
 
 def train_model(model, input_tensors, output_tensors, optimizer, minibatch_size):
 	"""
@@ -316,6 +396,7 @@ def train_model(model, input_tensors, output_tensors, optimizer, minibatch_size)
 			count += 1
 			if count % 25 == 0: # plot every 23 epochs for minibatch size of 32
 				plot_predictions(model, test_inputs, test_outputs, count//25)
+				quiver_gradients(count//25, model, input_batch, output_batch)
 
 
 		print (f'Epoch {epoch} complete: {total_loss} loss')

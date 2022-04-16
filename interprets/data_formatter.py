@@ -14,7 +14,7 @@ class Format:
 	def __init__(self, file, prediction_feature):
 
 		df = pd.read_csv(file)	
-		df = df.applymap(lambda x: '' if str(x).lower()[0] == 'nan' else x)
+		df = df.applymap(lambda x: '' if str(x).lower()[0] == 'n' else x)
 		df = df[:][:10000]
 		self.prediction_feature = prediction_feature
 

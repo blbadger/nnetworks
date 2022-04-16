@@ -340,6 +340,7 @@ class ActivateNet:
 
 	def quiver_gradients(self, index, input_tensor, output_tensor, minibatch_size=64):
 		"""
+		plots
 
 		"""
 		self.model.eval()

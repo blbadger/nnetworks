@@ -30,7 +30,7 @@ class MultiLayerPerceptron(nn.Module):
 
 		super().__init__()
 		self.input_size = input_size
-		hidden1_size = 500
+		hidden1_size = 900
 		hidden2_size = 100
 		hidden3_size = 20
 		self.input2hidden = nn.Linear(input_size, hidden1_size)
@@ -477,6 +477,7 @@ class ActivateNet:
 			total_loss = 0
 
 			for i in range(0, len(input_tensors) - minibatch_size, minibatch_size):
+				print (count)
 				input_batch = torch.stack(input_tensors[i:i + minibatch_size])
 				output_batch = torch.stack(output_tensors[i:i + minibatch_size])
 
@@ -486,14 +487,13 @@ class ActivateNet:
 
 				output, loss = self.train_minibatch(input_batch, output_batch, minibatch_size)
 				total_loss += loss
-				if i % 200 == 0: # plot every 23 epochs for minibatch size of 32
+				if count % 25 == 0:
 					# interpret = StaticInterpret(self.model, self.validation_inputs, self.validation_outputs)
-					
+					self.plot_predictions(count//25)
 					# interpret.heatmap(count, method='combined')
-					count += 1
+				count += 1
 
 			print (f'Epoch {epoch} complete: {total_loss} loss')
-			self.plot_predictions(count)
 			# self.test_model()
 
 		return

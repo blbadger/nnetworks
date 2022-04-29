@@ -338,7 +338,7 @@ class ActivateNet:
 
 	def plot_predictions(self, epoch_number):
 		"""
-		Plot
+		Plots the model predictions (y-axis) versus the true output (x-axis)
 
 		"""
 		self.model.eval() # switch to evaluation mode (silence dropouts etc.)

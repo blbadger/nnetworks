@@ -35,17 +35,15 @@ class Transformer(nn.Module):
 	to average across the states yielded by the transformer encoder before
 	passing this to a single hidden fully connected linear layer.
 	"""
-	def __init__(self, output_size, n_letters, d_model, nhead, feedforward_size, nlayers, minibatch_size, dropout=0.3):
+	def __init__(self, output_size, line_length, n_letters, nhead, feedforward_size, nlayers, minibatch_size, dropout=0.3):
 
 		super().__init__()
-		self.posencoder = PositionalEncoding(d_model, dropout)
-		self.d_model = d_model
-		encoder_layers = TransformerEncoderLayer(d_model, nhead, feedforward_size, dropout, batch_first=True)
+		self.posencoder = PositionalEncoding(n_letters)
+		encoder_layers = TransformerEncoderLayer(n_letters, nhead, feedforward_size, dropout, batch_first=True)
 		self.transformer_encoder = TransformerEncoder(encoder_layers, nlayers)
-		self.transformer2hidden = nn.Linear(n_letters * d_model, 50)
+		self.transformer2hidden = nn.Linear(line_length * n_letters, 50)
 		self.hidden2output = nn.Linear(50, 1)
 		self.relu = nn.ReLU()
-		self.n_letters = n_letters
 		self.minibatch_size = minibatch_size
 
 	def forward(self, input_tensor):
@@ -61,7 +59,7 @@ class Transformer(nn.Module):
 
 		# apply (relative) positional encoding
 		input_encoded = self.posencoder(input_tensor)
-		output = self.transformer_encoder(input_encoded)
+		output = self.transformer_encoder(input_tensor)
 
 		# output shape: same as input (batch size x sequence size x embedding dimension)
 		output = torch.flatten(output, start_dim=1)
@@ -78,12 +76,10 @@ class PositionalEncoding(nn.Module):
 	Encodes relative positional information on the input
 	"""
 
-	def __init__(self, model_size, dropout=0.3, max_len=1000):
+	def __init__(self, model_size, max_len=1000):
 
 		super().__init__()
-		self.dropout = nn.Dropout(dropout)
 		self.model_size = model_size
-
 		if self.model_size % 2 == 0:
 			arr = torch.zeros(max_len, model_size)
 
@@ -91,11 +87,10 @@ class PositionalEncoding(nn.Module):
 			arr = torch.zeros(max_len, model_size + 1)
 
 		position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
-		div_term = torch.exp(torch.arange(0, model_size, 2).float() * (-math.log(10*max_len)/ model_size))
+		div_term = torch.exp(torch.arange(0, model_size, 2).float() * (-math.log(10*max_len) / model_size))
 		arr[:, 0::2] = torch.sin(position * div_term)
 		arr[:, 1::2] = torch.cos(position * div_term)
-
-		arr = arr.unsqueeze(0).transpose(0, 1)
+		arr = arr.unsqueeze(0)
 		self.arr = arr
 
 
@@ -110,15 +105,9 @@ class PositionalEncoding(nn.Module):
 			dout: torch.Tensor of modified input
 
 		"""
-
-		if self.model_size % 2 == 0:
-			tensor = tensor + self.arr[:tensor.size(0), :, :]
-
-		else:
-			tensor = tensor + self.arr[:tensor.size(0), :, :-1] # -1 ending to prevent oob
-
-		dout = self.dropout(tensor)
-		return dout
+		tensor = tensor + self.arr[:, :tensor.size(1), :tensor.size(2)]
+		
+		return tensor
 
 
 def mse_loss(output, target):
@@ -200,10 +189,9 @@ def init_transformer(embedding_dim, minibatch_size, line_length):
 	feedforward_size = 280
 	nlayers = 3
 	nhead = 5
-	d_model = embedding_dim
-	n_letters = line_length
+	n_letters = embedding_dim # set the d_model to the number of letters used
 	n_output = 1
-	model = Transformer(n_output, n_letters, d_model, nhead, feedforward_size, nlayers, minibatch_size)
+	model = Transformer(n_output, line_length, n_letters, nhead, feedforward_size, nlayers, minibatch_size)
 	return model
 
 
@@ -221,8 +209,8 @@ def train_minibatch(input_tensor, output_tensor, optimizer, minibatch_size, mode
 	Returns:
 		output: torch.Tensor of model predictions
 		loss.item(): float of loss for that minibatch
-
 	"""
+
 	model.train()
 	output = model(input_tensor)
 	output_tensor = output_tensor.reshape(minibatch_size, 1)
@@ -236,12 +224,22 @@ def train_minibatch(input_tensor, output_tensor, optimizer, minibatch_size, mode
 
 	return output, loss.item()
 
+
 def plot_predictions(model, validation_inputs, validation_outputs, count):
 	"""
-	Plot
+	Plots the model's predicted values (y-axis) against the true values (x-axis)
 
+	Args:
+		model: torch.nn.Transformer module
+		validation_inputs: arr[torch.Tensor] 
+		validations_outputs: arr[torch.Tensor]
+		count: int, iteration of plot in sequence
+
+	Returns:
+		None (saves png file to disk)
 	"""
-	
+
+	model.eval()
 	model_outputs = []
 
 	with torch.no_grad():
@@ -261,7 +259,7 @@ def plot_predictions(model, validation_inputs, validation_outputs, count):
 	plt.close()
 	return
 
-# TODO: switch possible characters to ascii
+
 embedding_dim = len('0123456789. -:_')
 file = 'data/linear_historical.csv'
 input_tensors = Format(file, 'positive_control')
@@ -300,7 +298,9 @@ def count_parameters(model):
 	print (f'Total trainable parameters: {total_params}')
 	return total_params
 
+
 print (count_parameters(model))
+
 
 def quiver_gradients(index, model, input_tensor, output_tensor, minibatch_size=32):
 		"""
@@ -317,6 +317,7 @@ def quiver_gradients(index, model, input_tensor, output_tensor, minibatch_size=3
 		Returns:
 			None (saves matplotlib pyplot figure)
 		"""
+
 		model.eval()
 		layer = model.transformer_encoder.layers[0]
 		x, y = layer.linear1.bias[:2].detach().numpy()
@@ -396,7 +397,7 @@ def train_model(model, input_tensors, output_tensors, optimizer, minibatch_size)
 			count += 1
 			if count % 25 == 0: # plot every 23 epochs for minibatch size of 32
 				plot_predictions(model, test_inputs, test_outputs, count//25)
-				quiver_gradients(count//25, model, input_batch, output_batch)
+				# quiver_gradients(count//25, model, input_batch, output_batch)
 
 
 		print (f'Epoch {epoch} complete: {total_loss} loss')
@@ -421,12 +422,14 @@ def save_model(model):
 	return
 
 
-def evaluate_network(model):
+def evaluate_network(model, validation_inputs, validation_outputs):
 	"""
 	Evaluate network on validation data.
 
 	Args:
 		model: Transformer class object
+		validation_inputs: arr[torch.Tensor]
+		validation_outputs: arr[torch.Tensor]
 
 	Returns:
 		None (prints validation accuracies)
@@ -441,16 +444,8 @@ def evaluate_network(model):
 		total_error = 0
 		mae_error = 0
 		weighted_mae = 0
-		for i in range(len(validation_data.val_inputs)): 
-			output, input, output_tensor, input_tensor = validation_data.validation()
-			model_output = model(input_tensor)
-			linear_output = validation_data.val_inputs['linear_ests'][i]
-			if linear_output:
-				model_output = (float(model_output) + linear_output) / 2
-
-			if i < 100:
-				print (model_output)
-
+		for i in range(len(validation_inputs)): 
+			model_output = model(validation_inputs[i])
 			total_error += (float(model_output) - float(output_tensor))**2
 			mae_error += abs(float(model_output) - float(output_tensor))
 			count += 1
@@ -470,10 +465,8 @@ def evaluate_network(model):
 
 
 train_model(model, input_arr, output_arr, optimizer, minibatch_size)
-
 # model.load_state_dict(torch.load('transformer.pth'))
-
-evaluate_network(model)
+evaluate_network(model, validation_inputs, validation_outputs)
 
 
 def predict(model, file):
@@ -526,16 +519,6 @@ def add_predictions():
 	df = pd.read_csv('data_to_predict.csv')
 	df['predicted_duration'] = predictions
 	df.to_csv('data_to_predict.csv')
-
-
-# add_predictions()
-
-
-model_interpretation = Interpret(model, file)
-model_interpretation.graph_attributions()
-
-
-
 
 
 

@@ -35,7 +35,7 @@ class Transformer(nn.Module):
 	to average across the states yielded by the transformer encoder before
 	passing this to a single hidden fully connected linear layer.
 	"""
-	def __init__(self, output_size, line_length, n_letters, nhead, feedforward_size, nlayers, minibatch_size, dropout=0.3):
+	def __init__(self, output_size, line_length, n_letters, nhead, feedforward_size, nlayers, minibatch_size, dropout=0.3, posencoding=False):
 
 		super().__init__()
 		self.posencoder = PositionalEncoding(n_letters)
@@ -44,7 +44,7 @@ class Transformer(nn.Module):
 		self.transformer2hidden = nn.Linear(line_length * n_letters, 50)
 		self.hidden2output = nn.Linear(50, 1)
 		self.relu = nn.ReLU()
-		self.minibatch_size = minibatch_size
+		self.posencoding = posencoding 
 
 	def forward(self, input_tensor):
 		"""
@@ -57,8 +57,10 @@ class Transformer(nn.Module):
 			output: torch.Tensor, linear output
 		"""
 
-		# apply (relative) positional encoding
-		input_encoded = self.posencoder(input_tensor)
+		# apply (relative) positional encoding if desired
+		if self.posencoding:
+			input_encoded = self.posencoder(input_tensor)
+
 		output = self.transformer_encoder(input_tensor)
 
 		# output shape: same as input (batch size x sequence size x embedding dimension)
@@ -119,7 +121,8 @@ class ActivateNetwork:
 		self.train_inputs, self.train_outputs = input_tensors.transform_to_tensors(training=True, flatten=False)
 		self.test_inputs, self.test_outputs = input_tensors.transform_to_tensors(training=False, flatten=False)
 		self.line_length = len(self.train_inputs[0])
-		self.minibatch_size = 32
+		print (self.line_length)
+		self.minibatch_size = 8
 		self.model = self.init_transformer(embedding_dim, self.minibatch_size, self.line_length)
 		self.optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-4)
 		self.loss_function = nn.L1Loss()
@@ -329,8 +332,8 @@ class ActivateNetwork:
 				output, loss = self.train_minibatch(input_batch, output_batch, self.minibatch_size)
 				total_loss += loss
 				count += 1
-				if count % 25 == 0: # plot every 23 epochs for minibatch size of 32
-					self.plot_predictions(self.test_inputs, self.test_outputs, count//25)
+				if count % 100 == 0: # plot every 23 epochs for minibatch size of 32
+					self.plot_predictions(self.test_inputs, self.test_outputs, count//100)
 					# quiver_gradients(count//25, model, input_batch, output_batch)
 
 			print (f'Epoch {epoch} complete: {total_loss} loss')
@@ -437,6 +440,7 @@ class ActivateNetwork:
 		print (f'Validation Mean Absolute Error: {mae_error / count}')
 
 		return
+
 net = ActivateNetwork()
 net.train_model()
 net.evaluate_network()

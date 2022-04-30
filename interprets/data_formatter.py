@@ -88,7 +88,7 @@ class Format:
 		places_dict = {s:i for i, s in enumerate('0123456789. -:_')}
 
 		# vocab_size x embedding dimension (ie input length)
-		tensor_shape = (len(string), len(places_dict)) 
+		tensor_shape = (len(string) + 1, len(places_dict)) 
 		tensor = torch.zeros(tensor_shape)
 
 		for i, letter in enumerate(string):

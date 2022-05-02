@@ -20,9 +20,9 @@ import torchvision
 
 
 # dataset directory specification
-data_dir = pathlib.Path('../nnetworks_data/snap29_mono_train1',  fname='Combined')
-data_dir2 = pathlib.Path('../nnetworks_data/snap29_mono_test1', fname='Combined')
-data_dir3 = pathlib.Path('../nnetworks_data/snap29_mono_test2', fname='Combined')
+data_dir = pathlib.Path('../nnetworks_data/NN_snf7',  fname='Combined')
+data_dir2 = pathlib.Path('../nnetworks_data/NN_snf7_2', fname='Combined')
+data_dir3 = pathlib.Path('../nnetworks_data/NN_snf7_2', fname='Combined')
 
 image_count = len(list(data_dir.glob('*/*.png')))
 
@@ -54,8 +54,9 @@ class ImageDataset(Dataset):
 	def __getitem__(self, index):
 		# path to image
 		img_path = os.path.join(self.image_name_ls[index])
-		image = torchvision.io.read_image(img_path) # convert image to tensor of ints in range [0, 255]
-		image = image / 255. # convert ints to floats
+		image = torchvision.io.read_image(img_path, torchvision.io.ImageReadMode.GRAY) # convert image to tensor of ints as read in grayscale in range [0, 255]
+		image = image / 255. # convert ints to floats in range [0, 1]
+		image = torchvision.transforms.Resize(size=256)(image)	
 
 		# assign label to be a tensor based on the parent folder name
 		label = os.path.basename(os.path.dirname(self.image_name_ls[index]))
@@ -199,8 +200,6 @@ def gradientxinput(model, input_tensor, output_dim, max_normalized=False):
 
 	# backpropegate output gradient to input
 	output.backward(retain_graph=True)
-
-	# compute gradient x input
 	gradientxinput = torch.abs(input_tensor.grad) * input_tensor
 
 	if max_normalized:
@@ -210,6 +209,38 @@ def gradientxinput(model, input_tensor, output_dim, max_normalized=False):
 
 	return gradientxinput
 
+def loss_gradientxinput(model, input_tensor, true_output, output_dim, max_normalized=False):
+	"""
+	 Compute a gradientxinput attribution score
+
+	 Args:
+		input: torch.Tensor() object of input
+		model: Transformer() class object, trained neural network
+
+	 Returns:
+		gradientxinput: arr[float] of input attributions
+
+	"""
+
+	# change output to float
+	true_output = true_output.reshape(1)
+	input_tensor.requires_grad = True
+	output = model.forward(input_tensor)
+	loss = loss_fn(output, true_output)
+
+	# only scalars may be assigned a gradient
+	output = output.reshape(1, output_dim).max()
+
+	# backpropegate output gradient to input
+	loss.backward(retain_graph=True)
+	gradientxinput = torch.abs(input_tensor.grad) * input_tensor
+
+	if max_normalized:
+		max_val = torch.max(gradientxinput)
+		if max_val > 0:
+			gradientxinput = gradientxinput / max_val
+
+	return gradientxinput
 
 def train(dataloader, model, loss_fn, optimizer):
 	model.train()
@@ -220,6 +251,7 @@ def train(dataloader, model, loss_fn, optimizer):
 	for batch, (x, y) in enumerate(dataloader):
 		count += 1
 		x, y = x.to(device), y.to(device)
+		print (x.shape)
 		pred = model(x)
 		loss = loss_fn(pred, y)
 		total_loss += loss
@@ -236,7 +268,7 @@ def train(dataloader, model, loss_fn, optimizer):
 	start = time.time()
 	return
 
-def show_batch(input_batch, output_batch, gradxinput_batch, individuals=False):
+def show_batch(input_batch, output_batch, gradxinput_batch, individuals=True):
 	"""
 	Show a batch of images with gradientxinputs superimposed
 
@@ -246,11 +278,21 @@ def show_batch(input_batch, output_batch, gradxinput_batch, individuals=False):
 	"""
 	if individuals:
 		for n in range(len(input_batch)):
+			ax = plt.subplot(1, 3, 1)
 			plt.axis('off')
-			plt.title(class_names[output_batch[n]==1][0].title())
+			plt.title('Input')
+			plt.imshow(input_batch[n], cmap='gray', alpha=1)
+			ax = plt.subplot(1, 3, 2)
+			plt.axis('off')
+			plt.title('Gradient * Input')
+			plt.imshow(gradxinput_batch[n], cmap='inferno', alpha=1)
+			ax = plt.subplot(1, 3, 3)
+			plt.axis('off')
+			plt.title('Combined')
 			plt.imshow(input_batch[n], cmap='gray', alpha=1)
 			plt.imshow(gradxinput_batch[n], cmap='inferno', alpha=0.5)
-			plt.show()
+			plt.tight_layout()
+			plt.savefig(f'attribution{n}.png', dpi=410)
 			plt.close()
 
 	plt.figure(figsize=(10, 10))
@@ -279,10 +321,9 @@ def test(dataloader, model):
 	inputs, gradxinputs = [], []
 	for i in range(len(x)):
 		single_input= x[i].reshape(1, 1, 256, 256)
-		gxi = gradientxinput(model, single_input, output_dim=2)
+		gxi = gradientxinput(model, single_input, 2)
 		input_img = single_input.reshape(256, 256).detach().numpy()
 		gxi_img = gxi.reshape(256, 256).detach().numpy()
-
 		inputs.append(input_img)
 		gradxinputs.append(gxi_img)
 
@@ -299,12 +340,11 @@ loss_fn = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters())
 
 for e in range(epochs):
-	print (f"Epoch {e+1} \n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+	print (f"Epoch {e+1} \n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 	train(train_dataloader, model, loss_fn, optimizer)
-	test(test_dataloader, model)
 	print ('\n')
 
-# test(test_dataloader, model)
+test(test_dataloader, model)
 
 
 

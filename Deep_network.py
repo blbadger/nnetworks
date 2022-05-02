@@ -162,8 +162,6 @@ accuracies.append(string1[1])
 accuracies.append(string2[1])
 model.save_weights('model_final')
 
-
-
 ### Creates a panel of images classified by the trained neural network.
 image_batch, label_batch = next(test_data_gen1)
 test_images, test_labels = image_batch, label_batch

@@ -20,7 +20,6 @@ import matplotlib.pyplot as plt
 # Preprocess data
 
 fashion_mnist = tf.keras.datasets.fashion_mnist
-
 (train_images, train_labels), (test_images, test_labels) = fashion_mnist.load_data()
 
 class_names = ['T-shirt/top', 'Trouser', 'Pullover', 'Dress', 'Coat',
@@ -95,9 +94,7 @@ def superdeep_network(train_images, train_labels, test_images, test_labels):
 		metrics=['accuracy'])
 
 	model.summary()
-
-	model.fit(train_images, train_labels, epochs=9, batch_size = 10, verbose=1)
-
+	model.fit(train_images, train_labels, epochs=10, batch_size=64, verbose=1)
 	test_loss, test_acc = model.evaluate(test_images, test_labels, verbose=0)
 	return model
 
@@ -149,24 +146,52 @@ def alexnet(train_images, train_labels, test_images, test_labels):
 	### Compile model: choose loss and optimization functions
 
 	model.compile(optimizer=tf.keras.optimizers.SGD(momentum=0.9, lr=0.01, decay=0.3), 
-		loss = 'sparse_categorical_crossentropy', # labels are integers
+		loss = 'sparse_categorical_crossentropy', # labels are integers, not one-hot tensors
 		metrics=['accuracy'])
 
 	model.summary()
-
 	model.fit(train_images, train_labels, epochs=10, batch_size=20)
-
 	test_loss, test_acc = model.evaluate(test_images, test_labels, verbose=1)
+	return
 
 model = superdeep_network(train_images, train_labels, test_images, test_labels)
 
 # alexnet(train_images, train_labels, test_images, test_labels)
 
 ### Creates a panel of images classified by the trained neural network.
-
-
 image_batch, label_batch = test_images[:25], test_labels[:25]
 predictions = model.predict(test_images[:25])
+
+def gradientxinput(features, label):
+	# loss_object = tf.keras.losses.SparseCategoricalCrossentropy()
+	optimizer = tf.keras.optimizers.Adam()
+	features = features.reshape(1, 28, 28, 1)
+	ogfeatures = features
+	features = tf.Variable(features, dtype=tf.float32)
+	with tf.GradientTape() as tape:
+		predictions = model(features)
+
+	input_gradients = tape.gradient(predictions, features).numpy()
+	input_gradients = input_gradients.reshape(28, 28)
+	ogfeatures = ogfeatures.reshape(28, 28)
+	gradxinput = tf.abs(input_gradients) * ogfeatures
+	ax = plt.subplot(1, 3, 1)
+	plt.axis('off')
+	plt.title('Input')
+	plt.imshow(ogfeatures, cmap='gray', alpha=1)
+	ax = plt.subplot(1, 3, 2)
+	plt.axis('off')
+	plt.title('Gradient * Input')
+	plt.imshow(gradxinput, cmap='inferno', alpha=1)
+	ax = plt.subplot(1, 3, 3)
+	plt.axis('off')
+	plt.title('Combined')
+	plt.imshow(ogfeatures, cmap='gray', alpha=1)
+	plt.imshow(gradxinput, cmap='inferno', alpha=0.5)
+	plt.tight_layout()
+	plt.show()
+	plt.close()
+	# optimizer.apply_gradients(zip(gradients, model.trainable_variables))
 
 def plot_image(image, prediction, true_label):
 	""" 
@@ -194,8 +219,10 @@ num_images = 24
 plt.figure(figsize = (num_rows, num_cols))
 
 for i in range(num_images):
-  plt.subplot(num_rows, 2*num_cols, i+1)
-  plot_image(image_batch[i], predictions[i], test_labels[i])
+	plt.subplot(num_rows, 2*num_cols, i+1)
+	plot_image(image_batch[i], predictions[i], test_labels[i])
+	gradientxinput(image_batch[i], label_batch[i])
 
-plt.show() 
+
+plt.show()
 

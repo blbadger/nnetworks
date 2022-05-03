@@ -15,9 +15,19 @@ import torch
 from torch import nn
 from torch.nn import Conv2d
 from torch.utils.data import DataLoader, Dataset
-import matplotlib.pyplot as plt  
 import torchvision
+import matplotlib.pyplot as plt  
 
+
+# dataset directory specification
+data_dir = pathlib.Path('../Neural_networks/flower_1',  fname='Combined')
+data_dir2 = pathlib.Path('../Neural_networks/flower_2', fname='Combined')
+data_dir3 = pathlib.Path('../Neural_networks/flower_2', fname='Combined') # nnetworks_data/file
+
+image_count = len(list(data_dir.glob('*/*.jpg')))
+
+class_names = [item.name for item in data_dir.glob('*') 
+			   if item.name not in ['._.DS_Store', '._DS_Store', '.DS_Store']]
 
 class ImageDataset(Dataset):
 	"""
@@ -25,12 +35,12 @@ class ImageDataset(Dataset):
 	sampling of images to prevent overfitting
 	"""
 
-	def __init__(self, img_dir, transform=None, target_transform=None):
+	def __init__(self, img_dir, transform=None, target_transform=None, image_type='.png'):
 		# specify image labels by folder name 
 		self.img_labels = [item.name for item in data_dir.glob('*')]
 
 		# construct image name list: randomly sample 400 images for each epoch
-		images = list(img_dir.glob('*/*.png'))
+		images = list(img_dir.glob('*/*' + image_type))
 		random.shuffle(images)
 		self.image_name_ls = images[:800]
 
@@ -44,9 +54,9 @@ class ImageDataset(Dataset):
 	def __getitem__(self, index):
 		# path to image
 		img_path = os.path.join(self.image_name_ls[index])
-		image = torchvision.io.read_image(img_path, torchvision.io.ImageReadMode.GRAY) # convert image to tensor of ints as read in grayscale in range [0, 255]
+		image = torchvision.io.read_image(img_path) # convert image to tensor of ints as read in grayscale in range [0, 255]
 		image = image / 255. # convert ints to floats in range [0, 1]
-		image = torchvision.transforms.Resize(size=26)(image)	
+		image = torchvision.transforms.Resize(size=[256, 256])(image)	
 
 		# assign label to be a tensor based on the parent folder name
 		label = os.path.basename(os.path.dirname(self.image_name_ls[index]))
@@ -61,21 +71,11 @@ class ImageDataset(Dataset):
 		return image, label_tens
 
 # specify batch size
-batch_size = 32
-train_data = torchvision.datasets.FashionMNIST(
-	root = '../fashion_mnist/FashionMNIST',
-	train = True,
-	transform = torchvision.transforms.ToTensor()
-	)
+batch_size = 16
 
-test_data = torchvision.datasets.FashionMNIST(
-	root = '../fashion_mnist/FashionMNIST',
-	train = False,
-	transform = torchvision.transforms.ToTensor()
-	)
-
-class_names = ['T-shirt/top', 'Trouser', 'Pullover', 'Dress', 'Coat',
-			   'Sandal', 'Shirt', 'Sneaker', 'Bag', 'Ankle boot']
+train_data = ImageDataset(data_dir, image_type='.jpg')
+test_data = ImageDataset(data_dir2, image_type='.jpg')
+test_data2 = ImageDataset(data_dir3, image_type='.jpg')
 
 train_dataloader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
 test_dataloader = DataLoader(test_data, batch_size=batch_size, shuffle=False)
@@ -140,7 +140,7 @@ class MediumNetwork(nn.Module):
 	def __init__(self):
 
 		super(MediumNetwork, self).__init__()
-		self.entry_conv = Conv2d(1, 16, 3, padding=(1, 1))
+		self.entry_conv = Conv2d(3, 16, 3, padding=(1, 1))
 		self.conv16 = Conv2d(16, 16, 3, padding=(1, 1))
 		self.conv32 = Conv2d(16, 32, 3, padding=(1, 1))
 		self.conv32_2 = Conv2d(32, 32, 3, padding=(1, 1))
@@ -151,9 +151,9 @@ class MediumNetwork(nn.Module):
 		self.flatten = nn.Flatten()
 		self.relu = nn.ReLU()
 		self.softmax = nn.Softmax(dim=1)
-		self.d1 = nn.Linear(32, 512)
+		self.d1 = nn.Linear(8192, 512)
 		self.d2 = nn.Linear(512, 50)
-		self.d3 = nn.Linear(50, 10)
+		self.d3 = nn.Linear(50, 5)
 		
 
 	def forward(self, model_input):
@@ -241,30 +241,35 @@ def loss_gradientxinput(model, input_tensor, true_output, output_dim, max_normal
 
 	return gradientxinput
 
-def train(dataloader, model, loss_fn, optimizer):
+def train(dataloader, model, loss_fn, optimizer, epochs):
 	model.train()
 	count = 0
 	total_loss = 0
 	start = time.time()
 
-	for batch, (x, y) in enumerate(dataloader):
-		count += 1
-		x, y = x.to(device), y.to(device)
-		pred = model(x)
-		loss = loss_fn(pred, y)
-		total_loss += loss
+	for e in range(epochs):
+		print (f"Epoch {e+1} \n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+		print ('\n')
 
-		# zero out gradients to prevent addition between minibatches
-		optimizer.zero_grad()
-		loss.backward()
-		optimizer.step()
-		test(test_dataloader, model, count)
+		for batch, (x, y) in enumerate(dataloader):
+			test(test_dataloader, model, count)
+			print (count)
+			count += 1
+			x, y = x.to(device), y.to(device)
+			pred = model(x)
+			loss = loss_fn(pred, y)
+			total_loss += loss
 
-	ave_loss = float(total_loss) / count
-	elapsed_time = time.time() - start
-	print (f"Average Loss: {ave_loss:.04}")
-	print (f"Completed in {int(elapsed_time)} seconds")
-	start = time.time()
+			# zero out gradients to prevent addition between minibatches
+			optimizer.zero_grad()
+			loss.backward()
+			optimizer.step()
+
+		ave_loss = float(total_loss) / count
+		elapsed_time = time.time() - start
+		print (f"Average Loss: {ave_loss:.04}")
+		print (f"Completed in {int(elapsed_time)} seconds")
+		start = time.time()
 	return
 
 def show_batch(input_batch, output_batch, gradxinput_batch, individuals=False, count=0):
@@ -280,7 +285,7 @@ def show_batch(input_batch, output_batch, gradxinput_batch, individuals=False, c
 			ax = plt.subplot(1, 3, 1)
 			plt.axis('off')
 			plt.title('Input')
-			plt.imshow(input_batch[n], cmap='gray', alpha=1)
+			plt.imshow(input_batch[n], alpha=1)
 			ax = plt.subplot(1, 3, 2)
 			plt.axis('off')
 			plt.title('Gradient * Input')
@@ -288,22 +293,24 @@ def show_batch(input_batch, output_batch, gradxinput_batch, individuals=False, c
 			ax = plt.subplot(1, 3, 3)
 			plt.axis('off')
 			plt.title('Combined')
-			plt.imshow(input_batch[n], cmap='gray', alpha=1)
+			plt.imshow(input_batch[n], alpha=1)
 			plt.imshow(gradxinput_batch[n], cmap='inferno', alpha=0.5)
 			plt.tight_layout()
 			plt.savefig(f'attribution{n}.png', dpi=410)
 			plt.close()
 
-	plt.figure(figsize=(10, 10))
+	plt.figure(figsize=(15, 10))
 	for n in range(len(input_batch)):
-		ax = plt.subplot(4, 4, n+1) # expects a batch of size 16
+		ax = plt.subplot(2, 3, n+1) # expects a batch of size 16
 		plt.axis('off')
 		plt.title(class_names[int(output_batch[n])].title())
-		plt.imshow(input_batch[n], cmap='gray', alpha=1)
-		plt.imshow(gradxinput_batch[n], cmap='inferno', alpha=0.5)
+		plt.imshow(input_batch[n], alpha=1)
+		plt.imshow(gradxinput_batch[n], cmap='inferno', alpha=0.6)
 
 	plt.tight_layout()
-	plt.savefig('attribution_grid{0:04d}.png'.format(count), dpi=410)
+	# plt.show()
+	plt.savefig('flower_attributions{0:04d}.png'.format(count), dpi=410)
+	plt.close()
 	return
 
 
@@ -319,11 +326,12 @@ def test(dataloader, model, count=0):
 			break
 
 	inputs, gradxinputs = [], []
-	for i in range(len(x)):
-		single_input= x[i].reshape(1, 1, 28, 28)
-		gxi = gradientxinput(model, single_input, 10)
-		input_img = single_input.reshape(28, 28).detach().numpy()
-		gxi_img = gxi.reshape(28, 28).detach().numpy()
+	for i in range(len(x[:6])):
+		single_input= x[i].reshape(1, 3, 256, 256)
+		gxi = gradientxinput(model, single_input, 5)
+		gxi = torch.sum(gxi, 1)
+		input_img = single_input.reshape(3, 256, 256).permute(1, 2, 0).detach().numpy()
+		gxi_img = gxi.reshape(256, 256).detach().numpy()
 		inputs.append(input_img)
 		gradxinputs.append(gxi_img)
 
@@ -334,15 +342,12 @@ def test(dataloader, model, count=0):
 	return
 
 
-epochs = 10
-model = MediumNetwork()
+epochs = 50
+model = MediumNetwork() 
 loss_fn = nn.CrossEntropyLoss() 
 optimizer = torch.optim.Adam(model.parameters())
+train(train_dataloader, model, loss_fn, optimizer, epochs)
 
-for e in range(epochs):
-	print (f"Epoch {e+1} \n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
-	train(train_dataloader, model, loss_fn, optimizer)
-	print ('\n')
 
 
 

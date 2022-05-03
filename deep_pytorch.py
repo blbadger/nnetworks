@@ -15,16 +15,16 @@ import torch
 from torch import nn
 from torch.nn import Conv2d
 from torch.utils.data import DataLoader, Dataset
-import matplotlib.pyplot as plt  
 import torchvision
+import matplotlib.pyplot as plt  
 
 
 # dataset directory specification
-data_dir = pathlib.Path('../nnetworks_data/NN_snf7',  fname='Combined')
-data_dir2 = pathlib.Path('../nnetworks_data/NN_snf7_2', fname='Combined')
-data_dir3 = pathlib.Path('../nnetworks_data/NN_snf7_2', fname='Combined')
+data_dir = pathlib.Path('../Neural_networks/flower_1',  fname='Combined')
+data_dir2 = pathlib.Path('../Neural_networks/flower_2', fname='Combined')
+data_dir3 = pathlib.Path('../Neural_networks/flower_2', fname='Combined') # nnetworks_data/file
 
-image_count = len(list(data_dir.glob('*/*.png')))
+image_count = len(list(data_dir.glob('*/*.jpg')))
 
 class_names = [item.name for item in data_dir.glob('*') 
 			   if item.name not in ['._.DS_Store', '._DS_Store', '.DS_Store']]
@@ -35,12 +35,12 @@ class ImageDataset(Dataset):
 	sampling of images to prevent overfitting
 	"""
 
-	def __init__(self, img_dir, transform=None, target_transform=None):
+	def __init__(self, img_dir, transform=None, target_transform=None, image_type='.png'):
 		# specify image labels by folder name 
 		self.img_labels = [item.name for item in data_dir.glob('*')]
 
 		# construct image name list: randomly sample 400 images for each epoch
-		images = list(img_dir.glob('*/*.png'))
+		images = list(img_dir.glob('*/*' + image_type))
 		random.shuffle(images)
 		self.image_name_ls = images[:800]
 
@@ -56,7 +56,7 @@ class ImageDataset(Dataset):
 		img_path = os.path.join(self.image_name_ls[index])
 		image = torchvision.io.read_image(img_path, torchvision.io.ImageReadMode.GRAY) # convert image to tensor of ints as read in grayscale in range [0, 255]
 		image = image / 255. # convert ints to floats in range [0, 1]
-		image = torchvision.transforms.Resize(size=256)(image)	
+		image = torchvision.transforms.Resize(size=[256, 256])(image)	
 
 		# assign label to be a tensor based on the parent folder name
 		label = os.path.basename(os.path.dirname(self.image_name_ls[index]))
@@ -73,17 +73,16 @@ class ImageDataset(Dataset):
 # specify batch size
 batch_size = 16
 
-train_data = ImageDataset(data_dir)
-test_data = ImageDataset(data_dir2)
-test_data2 = ImageDataset(data_dir3)
+train_data = ImageDataset(data_dir, image_type='.jpg')
+test_data = ImageDataset(data_dir2, image_type='.jpg')
+test_data2 = ImageDataset(data_dir3, image_type='.jpg')
 
 train_dataloader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
-test_dataloader = DataLoader(test_data, batch_size=batch_size, shuffle=True)
+test_dataloader = DataLoader(test_data, batch_size=batch_size, shuffle=False)
 
 # send model to GPU if available
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print (f"Device: {device}")
-
 
 class DeepNetwork(nn.Module):
 
@@ -154,7 +153,7 @@ class MediumNetwork(nn.Module):
 		self.softmax = nn.Softmax(dim=1)
 		self.d1 = nn.Linear(8192, 512)
 		self.d2 = nn.Linear(512, 50)
-		self.d3 = nn.Linear(50, 2)
+		self.d3 = nn.Linear(50, 5)
 		
 
 	def forward(self, model_input):
@@ -242,33 +241,38 @@ def loss_gradientxinput(model, input_tensor, true_output, output_dim, max_normal
 
 	return gradientxinput
 
-def train(dataloader, model, loss_fn, optimizer):
+def train(dataloader, model, loss_fn, optimizer, epochs):
 	model.train()
 	count = 0
 	total_loss = 0
 	start = time.time()
 
-	for batch, (x, y) in enumerate(dataloader):
-		count += 1
-		x, y = x.to(device), y.to(device)
-		print (x.shape)
-		pred = model(x)
-		loss = loss_fn(pred, y)
-		total_loss += loss
+	for e in range(epochs):
+		print (f"Epoch {e+1} \n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+		print ('\n')
 
-		# zero out gradients to prevent addition between minibatches
-		optimizer.zero_grad()
-		loss.backward()
-		optimizer.step()
+		for batch, (x, y) in enumerate(dataloader):
+			test(test_dataloader, model, count)
+			print (count)
+			count += 1
+			x, y = x.to(device), y.to(device)
+			pred = model(x)
+			loss = loss_fn(pred, y)
+			total_loss += loss
 
-	ave_loss = float(total_loss) / count
-	elapsed_time = time.time() - start
-	print (f"Average Loss: {ave_loss:.04}")
-	print (f"Completed in {int(elapsed_time)} seconds")
-	start = time.time()
+			# zero out gradients to prevent addition between minibatches
+			optimizer.zero_grad()
+			loss.backward()
+			optimizer.step()
+
+		ave_loss = float(total_loss) / count
+		elapsed_time = time.time() - start
+		print (f"Average Loss: {ave_loss:.04}")
+		print (f"Completed in {int(elapsed_time)} seconds")
+		start = time.time()
 	return
 
-def show_batch(input_batch, output_batch, gradxinput_batch, individuals=True):
+def show_batch(input_batch, output_batch, gradxinput_batch, individuals=False, count=0):
 	"""
 	Show a batch of images with gradientxinputs superimposed
 
@@ -295,20 +299,22 @@ def show_batch(input_batch, output_batch, gradxinput_batch, individuals=True):
 			plt.savefig(f'attribution{n}.png', dpi=410)
 			plt.close()
 
-	plt.figure(figsize=(10, 10))
+	plt.figure(figsize=(15, 10))
 	for n in range(len(input_batch)):
-		ax = plt.subplot(4, 4, n+1) # expects a batch of size 16
+		ax = plt.subplot(2, 3, n+1) # expects a batch of size 16
 		plt.axis('off')
-		plt.title(class_names[output_batch[n]==1][0].title())
+		plt.title(class_names[int(output_batch[n])].title())
 		plt.imshow(input_batch[n], cmap='gray', alpha=1)
-		plt.imshow(gradxinput_batch[n], cmap='inferno', alpha=0.5)
+		plt.imshow(gradxinput_batch[n], cmap='inferno', alpha=0.6)
 
-	# plt.tight_layout()
-	plt.show()
+	plt.tight_layout()
+	# plt.show()
+	plt.savefig('flower_attributions{0:04d}.png'.format(count), dpi=410)
+	plt.close()
 	return
 
 
-def test(dataloader, model):
+def test(dataloader, model, count=0):
 	size = len(dataloader.dataset)	
 	model.eval()
 	test_loss, correct = 0, 0
@@ -317,34 +323,32 @@ def test(dataloader, model):
 			x, y = x.to(device), y.to(device)
 			pred = model(x)
 			correct += (pred.argmax(1) == y).type(torch.float).sum().item()
+			break
 
 	inputs, gradxinputs = [], []
-	for i in range(len(x)):
+	for i in range(len(x[:6])):
 		single_input= x[i].reshape(1, 1, 256, 256)
-		gxi = gradientxinput(model, single_input, 2)
+		gxi = gradientxinput(model, single_input, 5)
 		input_img = single_input.reshape(256, 256).detach().numpy()
 		gxi_img = gxi.reshape(256, 256).detach().numpy()
 		inputs.append(input_img)
 		gradxinputs.append(gxi_img)
 
-	show_batch(inputs, y, gradxinputs)
+	show_batch(inputs, y, gradxinputs, count=count)
 	accuracy = correct / size
 	print (f"Test accuracy: {int(correct)} / {size}")
 	model.train()
 	return
 
 
-epochs = 30
+epochs = 50
 model = MediumNetwork() 
 loss_fn = nn.CrossEntropyLoss() 
 optimizer = torch.optim.Adam(model.parameters())
+train(train_dataloader, model, loss_fn, optimizer, epochs)
 
-for e in range(epochs):
-	print (f"Epoch {e+1} \n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
-	train(train_dataloader, model, loss_fn, optimizer)
-	print ('\n')
 
-test(test_dataloader, model)
+
 
 
 

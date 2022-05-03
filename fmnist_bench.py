@@ -33,7 +33,7 @@ test_image_number = len(test_images)
 train_image_number = len(train_images)
 
 '''
-### Optional: displays training or test dataset images with classificaiton labels.
+### Optional: displays training or test dataset images with classification labels.
 def show_batch(image_batch, label_batch):
 	"""Takes a set of images (image_batch) and an array of labels (label_batch)
 	from the tensorflow preprocessing modules above as arguments and subsequently
@@ -163,7 +163,6 @@ image_batch, label_batch = test_images[:25], test_labels[:25]
 predictions = model.predict(test_images[:25])
 
 def gradientxinput(features, label):
-	# loss_object = tf.keras.losses.SparseCategoricalCrossentropy()
 	optimizer = tf.keras.optimizers.Adam()
 	features = features.reshape(1, 28, 28, 1)
 	ogfeatures = features
@@ -175,6 +174,7 @@ def gradientxinput(features, label):
 	input_gradients = input_gradients.reshape(28, 28)
 	ogfeatures = ogfeatures.reshape(28, 28)
 	gradxinput = tf.abs(input_gradients) * ogfeatures
+
 	ax = plt.subplot(1, 3, 1)
 	plt.axis('off')
 	plt.title('Input')
@@ -191,7 +191,8 @@ def gradientxinput(features, label):
 	plt.tight_layout()
 	plt.show()
 	plt.close()
-	# optimizer.apply_gradients(zip(gradients, model.trainable_variables))
+
+	return
 
 def plot_image(image, prediction, true_label):
 	""" 

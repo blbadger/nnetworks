@@ -46,7 +46,7 @@ class ImageDataset(Dataset):
 		img_path = os.path.join(self.image_name_ls[index])
 		image = torchvision.io.read_image(img_path, torchvision.io.ImageReadMode.GRAY) # convert image to tensor of ints as read in grayscale in range [0, 255]
 		image = image / 255. # convert ints to floats in range [0, 1]
-		image = torchvision.transforms.Resize(size=26)(image)	
+		image = torchvision.transforms.Resize(size=28)(image)	
 
 		# assign label to be a tensor based on the parent folder name
 		label = os.path.basename(os.path.dirname(self.image_name_ls[index]))
@@ -61,7 +61,7 @@ class ImageDataset(Dataset):
 		return image, label_tens
 
 # specify batch size
-batch_size = 32
+batch_size = 16
 train_data = torchvision.datasets.FashionMNIST(
 	root = '../fashion_mnist/FashionMNIST',
 	train = True,
@@ -102,7 +102,7 @@ class DeepNetwork(nn.Module):
 		self.softmax = nn.Softmax(dim=1)
 		self.d1 = nn.Linear(8192, 512)
 		self.d2 = nn.Linear(512, 50)
-		self.d3 = nn.Linear(50, 2)
+		self.d3 = nn.Linear(50, 10)
 		
 
 	def forward(self, model_input):
@@ -208,6 +208,33 @@ def gradientxinput(model, input_tensor, output_dim, max_normalized=False):
 
 	return gradientxinput
 
+def loss_gradient(model, input_tensor, true_output, output_dim):
+	"""
+	 Computes the gradient of the input wrt. the objective function
+
+	 Args:
+		input: torch.Tensor() object of input
+		model: Transformer() class object, trained neural network
+
+	 Returns:
+		gradientxinput: arr[float] of input attributions
+
+	"""
+
+	# change output to float
+	true_output = true_output.reshape(1)
+	input_tensor.requires_grad = True
+	output = model.forward(input_tensor)
+	loss = loss_fn(output, true_output)
+
+	# only scalars may be assigned a gradient
+	output = output.reshape(1, output_dim).max()
+
+	# backpropegate output gradient to input
+	loss.backward(retain_graph=True)
+	gradient = input_tensor.grad
+	return gradient
+
 def loss_gradientxinput(model, input_tensor, true_output, output_dim, max_normalized=False):
 	"""
 	 Compute a gradientxinput attribution score
@@ -258,7 +285,6 @@ def train(dataloader, model, loss_fn, optimizer):
 		optimizer.zero_grad()
 		loss.backward()
 		optimizer.step()
-		test(test_dataloader, model, count)
 
 	ave_loss = float(total_loss) / count
 	elapsed_time = time.time() - start
@@ -306,6 +332,76 @@ def show_batch(input_batch, output_batch, gradxinput_batch, individuals=False, c
 	plt.savefig('attribution_grid{0:04d}.png'.format(count), dpi=410)
 	return
 
+def generate_adversaries(model, input_tensors, output_tensors, index):
+	"""
+	Plots adversarial examples by applying the gradient of the loss with respect to the input.
+
+	Args:
+		input_tensor: torch.Tensor object, minibatch of inputs
+		output_tensor: torch.Tensor object, minibatch of outputs
+		index: int
+
+	returns:
+		None (saves .png image)
+	"""
+
+	single_input= input_tensors[index].reshape(1, 1, 28, 28)
+	input_grad = torch.sign(loss_gradient(model, single_input, output_tensors[index], 10))
+	added_input = single_input + 0.01*input_grad
+	original_pred = model(single_input)
+	grad_pred = model(0.01*input_grad)
+	adversarial_pred = model(added_input)
+
+	input_img = single_input.reshape(28, 28).detach().numpy()
+	gradient = 0.5*input_grad.reshape(28, 28).detach().numpy()
+	added_input = added_input.reshape(28, 28).detach().numpy()
+
+	original_class = class_names[int(original_pred.argmax(1))].title()
+	original_confidence = int(max(original_pred.detach().numpy()[0]) * 100)
+
+	adversarial_class = class_names[int(adversarial_pred.argmax(1))].title()
+	adversarial_confidence = int(max(adversarial_pred.detach().numpy()[0]) * 100)
+
+	grad_class = class_names[int(grad_pred.argmax(1))].title() 
+	grad_confidence = int(max(grad_pred.detach().numpy()[0]) * 100)
+
+	ax = plt.subplot(1, 3, 1)
+	plt.axis('off')
+	plt.title('{}% {}'.format(original_confidence, original_class))
+	plt.imshow(input_img, alpha=1, cmap='gray')
+	ax = plt.subplot(1, 3, 2)
+	plt.axis('off')
+	plt.title('Gradient Tensor')
+	plt.imshow(gradient, alpha=1, cmap='gray')
+	ax = plt.subplot(1, 3, 3)
+	plt.axis('off')
+	plt.title('{}% {}'.format(adversarial_confidence, adversarial_class))
+	plt.imshow(added_input, alpha=1, cmap='gray')
+	plt.tight_layout()
+	plt.savefig(f'adversarial_example{index}.png', dpi=410)
+	plt.close()
+
+	return
+
+def adversarial_test(dataloader, model, count=0):
+	size = len(dataloader.dataset)	
+	model.eval()
+	test_loss, correct = 0, 0
+	with torch.no_grad():
+		for x, y in dataloader:
+			x, y = x.to(device), y.to(device)
+			pred = model(x)
+			correct += (pred.argmax(1) == y).type(torch.float).sum().item()
+			break
+
+	inputs, gradxinputs = [], []
+	for i in range(len(x)):
+		generate_adversaries(model, x, y, i)
+	accuracy = correct / size
+	print (f"Test accuracy: {int(correct)} / {size}")
+	model.train()
+	return
+
 
 def test(dataloader, model, count=0):
 	size = len(dataloader.dataset)	
@@ -334,7 +430,7 @@ def test(dataloader, model, count=0):
 	return
 
 
-epochs = 10
+epochs = 30
 model = MediumNetwork()
 loss_fn = nn.CrossEntropyLoss() 
 optimizer = torch.optim.Adam(model.parameters())
@@ -343,6 +439,8 @@ for e in range(epochs):
 	print (f"Epoch {e+1} \n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 	train(train_dataloader, model, loss_fn, optimizer)
 	print ('\n')
+
+adversarial_test(test_dataloader, model)
 
 
 

@@ -176,7 +176,6 @@ class MediumNetwork(nn.Module):
 		return final_output
 
 
-
 def gradientxinput(model, input_tensor, output_dim, max_normalized=False):
 	"""
 	 Compute a gradientxinput attribution score
@@ -207,6 +206,34 @@ def gradientxinput(model, input_tensor, output_dim, max_normalized=False):
 			gradientxinput = gradientxinput / max_val
 
 	return gradientxinput
+
+def loss_gradient(model, input_tensor, true_output, output_dim):
+	"""
+	 Computes the gradient of the input wrt. the objective function
+
+	 Args:
+		input: torch.Tensor() object of input
+		model: Transformer() class object, trained neural network
+
+	 Returns:
+		gradientxinput: arr[float] of input attributions
+
+	"""
+
+	# change output to float
+	true_output = true_output.reshape(1)
+	input_tensor.requires_grad = True
+	output = model.forward(input_tensor)
+	loss = loss_fn(output, true_output)
+
+	# only scalars may be assigned a gradient
+	output = output.reshape(1, output_dim).max()
+
+	# backpropegate output gradient to input
+	loss.backward(retain_graph=True)
+	gradient = input_tensor.grad
+	return gradient
+
 
 def loss_gradientxinput(model, input_tensor, true_output, output_dim, max_normalized=False):
 	"""
@@ -250,10 +277,8 @@ def train(dataloader, model, loss_fn, optimizer, epochs):
 	for e in range(epochs):
 		print (f"Epoch {e+1} \n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 		print ('\n')
-
 		for batch, (x, y) in enumerate(dataloader):
 			test(test_dataloader, model, count)
-			print (count)
 			count += 1
 			x, y = x.to(device), y.to(device)
 			pred = model(x)
@@ -264,6 +289,8 @@ def train(dataloader, model, loss_fn, optimizer, epochs):
 			optimizer.zero_grad()
 			loss.backward()
 			optimizer.step()
+
+		adversarial_test(test_dataloader, model, count)
 
 		ave_loss = float(total_loss) / count
 		elapsed_time = time.time() - start
@@ -277,7 +304,15 @@ def show_batch(input_batch, output_batch, gradxinput_batch, individuals=False, c
 	Show a batch of images with gradientxinputs superimposed
 
 	Args:
-		output_batch: arr[torch.Tensor] of input images
+		input_batch: arr[torch.Tensor] of input images
+		output_batch: arr[torch.Tensor] of classification labels
+		gradxinput_batch: arr[torch.Tensor] of attributions per input image
+	kwargs:
+		individuals: Bool, if True then plots 1x3 image figs for each batch element
+		count: int
+
+	returns:
+		None (saves .png img)
 
 	"""
 	if individuals:
@@ -313,8 +348,74 @@ def show_batch(input_batch, output_batch, gradxinput_batch, individuals=False, c
 	plt.close()
 	return
 
+def generate_adversaries(model, input_tensors, output_tensors, index):
+	"""
+	Plots adversarial examples by applying the gradient of the loss with respect to the input.
 
-def test(dataloader, model, count=0):
+	Args:
+		input_tensor: torch.Tensor object, minibatch of inputs
+		output_tensor: torch.Tensor object, minibatch of outputs
+		index: int
+
+	returns:
+		None (saves .png image)
+	"""
+
+	single_input= input_tensors[index].reshape(1, 3, 256, 256)
+	input_grad = torch.sign(loss_gradient(model, single_input, output_tensors[index], 5))
+	added_input = single_input + 0.01*input_grad
+	original_pred = model(single_input)
+	grad_pred = model(0.01*input_grad)
+	adversarial_pred = model(added_input)
+
+	input_img = single_input.reshape(3, 256, 256).permute(1, 2, 0).detach().numpy()
+	gradient = 0.5*input_grad.reshape(3, 256, 256).permute(1, 2, 0).detach().numpy()
+	added_input = added_input.reshape(3, 256, 256).permute(1, 2, 0).detach().numpy()
+
+	original_class = class_names[int(original_pred.argmax(1))].title()
+	original_confidence = int(max(original_pred.detach().numpy()[0]) * 100)
+
+	adversarial_class = class_names[int(adversarial_pred.argmax(1))].title()
+	adversarial_confidence = int(max(adversarial_pred.detach().numpy()[0]) * 100)
+
+	grad_class = class_names[int(grad_pred.argmax(1))].title() 
+	grad_confidence = int(max(grad_pred.detach().numpy()[0]) * 100)
+
+	ax = plt.subplot(1, 3, 1)
+	plt.axis('off')
+	plt.title('{}% {}'.format(original_confidence, original_class))
+	plt.imshow(input_img, alpha=1)
+	ax = plt.subplot(1, 3, 2)
+	plt.axis('off')
+	plt.title('Gradient Tensor')
+	plt.imshow(gradient, alpha=1)
+	ax = plt.subplot(1, 3, 3)
+	plt.axis('off')
+	plt.title('{}% {}'.format(adversarial_confidence, adversarial_class))
+	plt.imshow(added_input, alpha=1)
+	plt.tight_layout()
+	plt.savefig(f'adversarial_example{index}.png', dpi=410)
+	plt.close()
+
+	return
+
+
+def adversarial_test(dataloader, model, count=0):
+	size = len(dataloader.dataset)	
+	model.eval()
+	test_loss, correct = 0, 0
+	with torch.no_grad():
+		for x, y in dataloader:
+			x, y = x.to(device), y.to(device)
+			break
+
+	inputs, gradxinputs = [], []
+	for i in range(len(x)):
+		generate_adversaries(model, x, y, i)
+	model.train()
+	return
+
+def test(dataloader, model, count=0, short=True):
 	size = len(dataloader.dataset)	
 	model.eval()
 	test_loss, correct = 0, 0
@@ -323,7 +424,8 @@ def test(dataloader, model, count=0):
 			x, y = x.to(device), y.to(device)
 			pred = model(x)
 			correct += (pred.argmax(1) == y).type(torch.float).sum().item()
-			break
+			if short:
+				break
 
 	inputs, gradxinputs = [], []
 	for i in range(len(x[:6])):

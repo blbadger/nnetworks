@@ -18,6 +18,9 @@ from torch.utils.data import DataLoader, Dataset
 import torchvision
 import matplotlib.pyplot as plt  
 
+print (torch.cuda.is_available())
+print (torch.cuda.device_count())
+print (torch.cuda.current_device())
 
 # dataset directory specification
 data_dir = pathlib.Path('../Neural_networks/flower_1',  fname='Combined')

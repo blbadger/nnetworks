@@ -54,7 +54,7 @@ class ImageDataset(Dataset):
 	def __getitem__(self, index):
 		# path to image
 		img_path = os.path.join(self.image_name_ls[index])
-		image = torchvision.io.read_image(img_path) # convert image to tensor of ints as read in grayscale in range [0, 255]
+		image = torchvision.io.read_image(img_path) # convert image to tensor of ints
 		image = image / 255. # convert ints to floats in range [0, 1]
 		image = torchvision.transforms.Resize(size=[256, 256])(image)	
 
@@ -89,7 +89,7 @@ class DeepNetwork(nn.Module):
 	def __init__(self):
 
 		super(DeepNetwork, self).__init__()
-		self.entry_conv = Conv2d(1, 16, 3, padding=(1, 1))
+		self.entry_conv = Conv2d(3, 16, 3, padding=(1, 1))
 		self.conv16 = Conv2d(16, 16, 3, padding=(1, 1))
 		self.conv32 = Conv2d(16, 32, 3, padding=(1, 1))
 		self.conv32_2 = Conv2d(32, 32, 3, padding=(1, 1))
@@ -134,12 +134,11 @@ class DeepNetwork(nn.Module):
 		final_output = self.softmax(final_output)
 		return final_output
 
-
-class MediumNetwork(nn.Module):
+class MediumNetworkFull(nn.Module):
 
 	def __init__(self):
 
-		super(MediumNetwork, self).__init__()
+		super(MediumNetworkFull, self).__init__()
 		self.entry_conv = Conv2d(3, 16, 3, padding=(1, 1))
 		self.conv16 = Conv2d(16, 16, 3, padding=(1, 1))
 		self.conv32 = Conv2d(16, 32, 3, padding=(1, 1))
@@ -174,6 +173,92 @@ class MediumNetwork(nn.Module):
 		final_output = self.d3(output)
 		final_output = self.softmax(final_output)
 		return final_output
+
+class MediumNetwork(nn.Module):
+
+	def __init__(self):
+
+		super(MediumNetwork, self).__init__()
+		self.entry_conv = Conv2d(3, 16, 3, padding=(1, 1))
+		self.conv16 = Conv2d(16, 16, 3, padding=(1, 1))
+		self.conv32 = Conv2d(16, 32, 3, padding=(1, 1))
+		self.conv32_2 = Conv2d(32, 32, 3, padding=(1, 1))
+		self.conv64 = Conv2d(32, 64, 3, padding=(1, 1))
+		self.conv64_2 = Conv2d(64, 64, 3, padding=(1, 1))
+
+		self.max_pooling = nn.MaxPool2d(2, return_indices=True)
+		self.flatten = nn.Flatten()
+		self.relu = nn.ReLU()
+		self.softmax = nn.Softmax(dim=1)
+		self.d1 = nn.Linear(8192, 512)
+		self.d2 = nn.Linear(512, 50)
+		self.d3 = nn.Linear(50, 2)
+		self.index1, self.index2, self.index3, self.index4 = [], [], [], []
+		self.batchnorm1 = nn.BatchNorm1d(512)
+		self.batchnorm2 = nn.BatchNorm1d(50)
+		
+
+	def forward(self, model_input):
+		out = self.relu(self.entry_conv(model_input))
+		out, self.index1 = self.max_pooling(out)
+		out = self.relu(self.conv16(out))
+		out, self.index2 = self.max_pooling(out)
+		out = self.relu(self.conv16(out))
+		out, self.index3 = self.max_pooling(out)
+		out = self.relu(self.conv32(out))
+		out, self.index4 = self.max_pooling(out)
+		output = torch.flatten(out, 1, 3)
+
+		output = self.d1(output)
+		output = self.relu(output)
+		output = self.d2(output)
+		output = self.relu(output)
+		final_output = self.d3(output)
+		final_output = self.softmax(final_output)
+		return final_output
+
+
+class InvertedMediumNet(nn.Module):
+
+	def __init__(self):
+
+		super(InvertedMediumNet, self).__init__()
+		self.entry_conv = Conv2d(16, 3, 3, padding=(1, 1))
+		self.conv16 = Conv2d(16, 16, 3, padding=(1, 1))
+		self.conv32 = Conv2d(32, 16, 3, padding=(1, 1))
+		self.conv32_2 = Conv2d(32, 32, 3, padding=(1, 1))
+		self.conv64 = Conv2d(64, 32, 3, padding=(1, 1))
+		self.conv64_2 = Conv2d(64, 64, 3, padding=(1, 1))
+
+		self.max_pooling = nn.MaxUnpool2d(2)
+		self.flatten = nn.Flatten()
+		self.relu = nn.ReLU()
+		self.softmax = nn.Softmax(dim=1)
+		self.d1 = nn.Linear(512, 8192)
+		self.d2 = nn.Linear(50, 512)
+		self.d3 = nn.Linear(5, 50)
+		self.batchnorm1 = nn.BatchNorm1d(512)
+		self.batchnorm2 = nn.BatchNorm1d(50)
+		
+
+	def forward(self, final_output):
+		# final_output = self.softmax(final_output)
+		output = self.d3(final_output)
+		output = self.relu(output)
+		output = self.d2(output)
+		output = self.relu(output)
+		output = self.d1(output)
+
+		out = torch.reshape(output, (16, 32, 16, 16)) # reshape for convolutions
+		out = self.max_pooling(out, discriminator.index4)
+		out = self.relu(self.conv32(out))
+		out = self.max_pooling(out, discriminator.index3)
+		out = self.relu(self.conv16(out))
+		out = self.max_pooling(out, discriminator.index2)
+		out = self.relu(self.conv16(out))
+		out = self.max_pooling(out, discriminator.index1)
+		out = self.relu(self.entry_conv(out))
+		return out
 
 
 def gradientxinput(model, input_tensor, output_dim, max_normalized=False):
@@ -224,10 +309,8 @@ def loss_gradient(model, input_tensor, true_output, output_dim):
 	true_output = true_output.reshape(1)
 	input_tensor.requires_grad = True
 	output = model.forward(input_tensor)
-	loss = loss_fn(output, true_output)
 
-	# only scalars may be assigned a gradient
-	output = output.reshape(1, output_dim).max()
+	loss = loss_fn(output, true_output)
 
 	# backpropegate output gradient to input
 	loss.backward(retain_graph=True)
@@ -278,7 +361,9 @@ def train(dataloader, model, loss_fn, optimizer, epochs):
 		print (f"Epoch {e+1} \n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 		print ('\n')
 		for batch, (x, y) in enumerate(dataloader):
-			test(test_dataloader, model, count)
+			print (x.shape)
+			# test(test_dataloader, model, count)
+			# adversarial_test(test_dataloader, model, count)
 			count += 1
 			x, y = x.to(device), y.to(device)
 			pred = model(x)
@@ -290,13 +375,70 @@ def train(dataloader, model, loss_fn, optimizer, epochs):
 			loss.backward()
 			optimizer.step()
 
-		adversarial_test(test_dataloader, model, count)
 
 		ave_loss = float(total_loss) / count
 		elapsed_time = time.time() - start
 		print (f"Average Loss: {ave_loss:.04}")
 		print (f"Completed in {int(elapsed_time)} seconds")
 		start = time.time()
+	return
+
+
+def train_generative_adversaries(dataloader, discriminator, discriminator_optimizer, generator, generator_optimizer, loss_fn, epochs):
+	discriminator.train()
+	generator.train()
+	count = 0
+	total_loss = 0
+	start = time.time()
+
+	for e in range(epochs):
+		print (f"Epoch {e+1} \n~~~~~~~~~~~~~~~~~~~~~~~")
+		print ('\n')
+		for batch, (x, y) in enumerate(dataloader):
+			count += 1
+			_ = discriminator(x) # initialize the index arrays
+
+			random_output = torch.randn(16, 5)
+			generated_samples = generator(random_output)
+			input_dataset = torch.cat([x, generated_samples]) # or torch.cat([x, torch.rand(x.shape)])
+			output_labels = torch.cat([torch.ones(len(y), dtype=int), torch.zeros(len(generated_samples), dtype=int)])
+			discriminator_prediction = discriminator(input_dataset)
+			discriminator_loss = loss_fn(discriminator_prediction, output_labels)
+
+			discriminator_optimizer.zero_grad()
+			discriminator_loss.backward()
+			discriminator_optimizer.step()
+			print (f'Discriminator loss: {discriminator_loss}')
+			print (discriminator.d2.bias.norm())
+
+			_ = discriminator(x) # reset index dims to 16-element minibatch size
+				
+			generated_outputs = generator(random_output)
+			discriminator_outputs = discriminator(generated_outputs)
+			generator_loss = loss_fn(discriminator_outputs, torch.ones(len(y), dtype=int)) # pretend that all generated inputs are in the dataset
+
+			# prevent early convergence
+			if generator_loss > 0.1:
+				generator_optimizer.zero_grad()
+				generator_loss.backward()
+				generator_optimizer.step()
+
+				print (generator.d2.bias.norm())
+				print (discriminator_prediction)
+				print (generator_loss)
+				plt.axis('off')
+				output = generator(random_output)
+				plt.imshow((generated_outputs[0] / torch.max(generated_outputs[0])).reshape(3, 256, 256).permute(1, 2, 0).detach().numpy())
+				plt.tight_layout()
+				plt.savefig('gan{0:04d}'.format(count), dpi=410)
+				plt.close()
+
+		ave_loss = float(total_loss) / count
+		elapsed_time = time.time() - start
+		print (f"Average Loss: {ave_loss:.04}")
+		print (f"Completed in {int(elapsed_time)} seconds")
+		start = time.time()
+
 	return
 
 def show_batch(input_batch, output_batch, gradxinput_batch, individuals=False, count=0):
@@ -336,11 +478,11 @@ def show_batch(input_batch, output_batch, gradxinput_batch, individuals=False, c
 
 	plt.figure(figsize=(15, 10))
 	for n in range(len(input_batch)):
-		ax = plt.subplot(2, 3, n+1) # expects a batch of size 16
+		ax = plt.subplot(4, 4, n+1) # expects a batch of size 16
 		plt.axis('off')
-		plt.title(class_names[int(output_batch[n])].title())
+		# plt.title(class_names[int(output_batch[n])].title())
 		plt.imshow(input_batch[n], alpha=1)
-		plt.imshow(gradxinput_batch[n], cmap='inferno', alpha=0.6)
+		# plt.imshow(gradxinput_batch[n], cmap='inferno', alpha=1)
 
 	plt.tight_layout()
 	# plt.show()
@@ -348,7 +490,7 @@ def show_batch(input_batch, output_batch, gradxinput_batch, individuals=False, c
 	plt.close()
 	return
 
-def generate_adversaries(model, input_tensors, output_tensors, index):
+def plot_adversaries(model, input_tensors, output_tensors, index, count):
 	"""
 	Plots adversarial examples by applying the gradient of the loss with respect to the input.
 
@@ -361,19 +503,22 @@ def generate_adversaries(model, input_tensors, output_tensors, index):
 		None (saves .png image)
 	"""
 
-	single_input= input_tensors[index].reshape(1, 3, 256, 256)
-	input_grad = torch.sign(loss_gradient(model, single_input, output_tensors[index], 5))
-	added_input = single_input + 0.01*input_grad
+	single_input = input_tensors[index].reshape(1, 3, 256, 256)
+	input_grad = loss_gradient(model, single_input, output_tensors[index], 5)
+	input_grad = torch.rand(input_grad.shape)
+	input_grad /= torch.max(input_grad)
+	added_input = single_input + 0.15*input_grad
 	original_pred = model(single_input)
 	grad_pred = model(0.01*input_grad)
 	adversarial_pred = model(added_input)
 
 	input_img = single_input.reshape(3, 256, 256).permute(1, 2, 0).detach().numpy()
-	gradient = 0.5*input_grad.reshape(3, 256, 256).permute(1, 2, 0).detach().numpy()
+	gradient = 15*input_grad.reshape(3, 256, 256).permute(1, 2, 0).detach().numpy()
 	added_input = added_input.reshape(3, 256, 256).permute(1, 2, 0).detach().numpy()
 
 	original_class = class_names[int(original_pred.argmax(1))].title()
 	original_confidence = int(max(original_pred.detach().numpy()[0]) * 100)
+	actual_class = class_names[int(output_tensors[index])].title()
 
 	adversarial_class = class_names[int(adversarial_pred.argmax(1))].title()
 	adversarial_confidence = int(max(adversarial_pred.detach().numpy()[0]) * 100)
@@ -387,18 +532,126 @@ def generate_adversaries(model, input_tensors, output_tensors, index):
 	plt.imshow(input_img, alpha=1)
 	ax = plt.subplot(1, 3, 2)
 	plt.axis('off')
-	plt.title('Gradient Tensor')
+	plt.title('{}% {}'.format(adversarial_confidence, adversarial_class))
 	plt.imshow(gradient, alpha=1)
 	ax = plt.subplot(1, 3, 3)
 	plt.axis('off')
 	plt.title('{}% {}'.format(adversarial_confidence, adversarial_class))
 	plt.imshow(added_input, alpha=1)
 	plt.tight_layout()
-	plt.savefig(f'adversarial_example{index}.png', dpi=410)
+	plt.savefig('adversarial_example{0:04d}.png'.format(count), dpi=410)
 	plt.close()
 
 	return
 
+def generate_adversaries(model, input_tensors, output_tensors, index, count):
+	"""
+	Plots adversarial examples by applying the gradient of the loss with respect to the input.
+
+	Args:
+		input_tensor: torch.Tensor object, minibatch of inputs
+		output_tensor: torch.Tensor object, minibatch of outputs
+		index: int
+
+	returns:
+		None (saves .png image)
+	"""
+
+	single_input = input_tensors[index].reshape(1, 3, 256, 256)
+	input_grad = loss_gradient(model, single_input, output_tensors[index], 5)
+	input_grad /= torch.max(input_grad)
+	added_input = single_input + 0.15*input_grad
+	original_pred = model(single_input)
+	grad_pred = model(0.01*input_grad)
+
+	input_img = single_input.reshape(3, 256, 256).permute(1, 2, 0).detach().numpy()
+	gradient = 15*input_grad.res
+	gradient = gradient.shape(3, 256, 256).permute(1, 2, 0).detach().numpy()
+
+	plt.figure(figsize=(18, 10))
+	ax = plt.subplot(1, 2, 1)
+	plt.axis('off')
+	plt.imshow(input_img, alpha=1)
+	ax = plt.subplot(1, 2, 2)
+	plt.axis('off')
+	plt.imshow(gradient, alpha=1)
+	plt.tight_layout()
+	plt.savefig('adversarial_example{0:04d}.png'.format(count), dpi=410)
+	plt.close()
+
+	return
+
+def og_generate_input(model, input_tensors, output_tensors, index, count):
+	"""
+	Generates an input for a given output
+
+	Args:
+		input_tensor: torch.Tensor object, minibatch of inputs
+		output_tensor: torch.Tensor object, minibatch of outputs
+		index: int
+
+	returns:
+		None (saves .png image)
+	"""
+
+	target_input = input_tensors[index].reshape(1, 3, 256, 256)
+	single_input = torch.rand(1, 3, 256, 256) # uniform distribution initialization
+	output_tensors[index] = torch.Tensor([4])
+
+	for i in range(1000):
+		single_input = single_input.detach() # remove the gradient for the input (if present)
+		input_grad = loss_gradient(model, single_input, output_tensors[index], 5) # compute input gradient
+		last_input = single_input.clone()
+		single_input = single_input - 10*input_grad # gradient descent step
+
+	single_input = single_input.clone() / torch.max(single_input) * 10
+	single_input = single_input.reshape(3, 256, 256).permute(1, 2, 0).detach().numpy()
+	target_input = target_input.reshape(3, 256, 256).permute(1, 2, 0).detach().numpy()
+	target_name = class_names[int(output_tensors[index])].title()
+
+	plt.axis('off')
+	plt.title(f'{target_name}')
+	plt.imshow(single_input, alpha=1)
+	plt.savefig('adversarial_example{0:04d}.png'.format(count), dpi=410)
+	plt.close()
+
+	return
+
+def generate_input(model, input_tensors, output_tensors, index, count):
+	"""
+	Generates an input for a given output
+
+	Args:
+		input_tensor: torch.Tensor object, minibatch of inputs
+		output_tensor: torch.Tensor object, minibatch of outputs
+		index: int
+
+	returns:
+		None (saves .png image)
+	"""
+
+	target_input = input_tensors[index].reshape(1, 3, 256, 256)
+	single_input = target_input.clone()
+	# single_input = torch.rand(1, 3, 256, 256) # uniform distribution initialization
+
+	for i in range(20):
+		single_input = single_input.detach() # remove the gradient for the input (if present)
+		predicted_output = output_tensors[index].argmax(0)
+		input_grad = loss_gradient(model, single_input, predicted_output, 5) # compute input gradient
+		single_input = single_input - 10000*input_grad # gradient descent step
+
+	single_input = single_input.clone() / torch.max(single_input)
+	single_input = single_input.reshape(3, 256, 256).permute(1, 2, 0).detach().numpy()
+	target_input = target_input.reshape(3, 256, 256).permute(1, 2, 0).detach().numpy()
+	target_name = class_names[int(predicted_output)].title()
+
+	plt.axis('off')
+	plt.title(f'{target_name}')
+	plt.imshow(single_input, alpha=1)
+	plt.savefig('adversarial_example{0:04d}.png'.format(count), dpi=410)
+	plt.close()
+
+	return
 
 def adversarial_test(dataloader, model, count=0):
 	size = len(dataloader.dataset)	
@@ -410,8 +663,8 @@ def adversarial_test(dataloader, model, count=0):
 			break
 
 	inputs, gradxinputs = [], []
-	for i in range(len(x)):
-		generate_adversaries(model, x, y, i)
+	for i in range(1):
+		generate_input(model, x, y, i, count=count)
 	model.train()
 	return
 
@@ -430,10 +683,11 @@ def test(dataloader, model, count=0, short=True):
 	inputs, gradxinputs = [], []
 	for i in range(len(x[:6])):
 		single_input= x[i].reshape(1, 3, 256, 256)
-		gxi = gradientxinput(model, single_input, 5)
-		gxi = torch.sum(gxi, 1)
+		gxi = loss_gradient(model, single_input, y[i], 5)
+		# gxi = torch.sum(gxi, 1)
 		input_img = single_input.reshape(3, 256, 256).permute(1, 2, 0).detach().numpy()
-		gxi_img = gxi.reshape(256, 256).detach().numpy()
+		gxi_img = gxi / torch.max(gxi) * 10
+		gxi_img = gxi_img.reshape(3, 256, 256).permute(1, 2, 0).detach().numpy()
 		inputs.append(input_img)
 		gradxinputs.append(gxi_img)
 
@@ -444,19 +698,16 @@ def test(dataloader, model, count=0, short=True):
 	return
 
 
-epochs = 50
-model = MediumNetwork() 
+epochs = 40
+model = MediumNetwork()
 loss_fn = nn.CrossEntropyLoss() 
 optimizer = torch.optim.Adam(model.parameters())
 train(train_dataloader, model, loss_fn, optimizer, epochs)
+# torch.save(model.state_dict(), 'trained_models/flowernet.pth')
 
-
-
-
-
-
-
-
+# model.load_state_dict(torch.load('trained_models/flowernet.pth'))
+# test(test_dataloader, model)
+adversarial_test(test_dataloader, model, 0)
 
 
 

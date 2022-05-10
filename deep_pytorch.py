@@ -213,7 +213,7 @@ def gradientxinput(model, input_tensor, output_dim, max_normalized=False):
 
 def loss_gradientxinput(model, input_tensor, true_output, output_dim, max_normalized=False):
 	"""
-	 Compute a gradientxinput attribution score
+	 Compute a gradientxinput attribution scor
 
 	 Args:
 		input: torch.Tensor() object of input

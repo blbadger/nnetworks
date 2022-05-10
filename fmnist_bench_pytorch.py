@@ -227,9 +227,6 @@ def loss_gradient(model, input_tensor, true_output, output_dim):
 	output = model.forward(input_tensor)
 	loss = loss_fn(output, true_output)
 
-	# only scalars may be assigned a gradient
-	output = output.reshape(1, output_dim).max()
-
 	# backpropegate output gradient to input
 	loss.backward(retain_graph=True)
 	gradient = input_tensor.grad
@@ -253,9 +250,6 @@ def loss_gradientxinput(model, input_tensor, true_output, output_dim, max_normal
 	input_tensor.requires_grad = True
 	output = model.forward(input_tensor)
 	loss = loss_fn(output, true_output)
-
-	# only scalars may be assigned a gradient
-	output = output.reshape(1, output_dim).max()
 
 	# backpropegate output gradient to input
 	loss.backward(retain_graph=True)
@@ -345,16 +339,27 @@ def generate_adversaries(model, input_tensors, output_tensors, index):
 		None (saves .png image)
 	"""
 
-	single_input= input_tensors[index].reshape(1, 1, 28, 28)
-	input_grad = torch.sign(loss_gradient(model, single_input, output_tensors[index], 10))
-	added_input = single_input + 0.01*input_grad
-	original_pred = model(single_input)
-	grad_pred = model(0.01*input_grad)
-	adversarial_pred = model(added_input)
+	single_input = input_tensors[index].reshape(1, 1, 28, 28)
+	# input_grad = torch.sign(torch.rand(single_input.shape) - 0.5)
+	# added_input = single_input + 0.1*input_grad
 
+	added_input = torch.clone(single_input)
+	for i in range(200):
+		input_grad = torch.sign(loss_gradient(model, added_input, output_tensors[index], 10))
+		# max_grad = torch.max(input_grad)
+		# if max_grad == 0:
+		# 	continue
+		# input_grad = input_grad / max_grad
+		added_input = added_input + 0.001*input_grad
+		added_input = added_input.detach()
+
+	original_pred = model(single_input)
+	adversarial_pred = model(added_input)
+	grad_pred = model(0.1*input_grad)
 	input_img = single_input.reshape(28, 28).detach().numpy()
 	gradient = 0.5*input_grad.reshape(28, 28).detach().numpy()
 	added_input = added_input.reshape(28, 28).detach().numpy()
+	actual_class = class_names[int(output_tensors[index])].title()
 
 	original_class = class_names[int(original_pred.argmax(1))].title()
 	original_confidence = int(max(original_pred.detach().numpy()[0]) * 100)
@@ -367,7 +372,7 @@ def generate_adversaries(model, input_tensors, output_tensors, index):
 
 	ax = plt.subplot(1, 3, 1)
 	plt.axis('off')
-	plt.title('{}% {}'.format(original_confidence, original_class))
+	plt.title('{}% {}, {}'.format(original_confidence, original_class, actual_class))
 	plt.imshow(input_img, alpha=1, cmap='gray')
 	ax = plt.subplot(1, 3, 2)
 	plt.axis('off')
@@ -381,24 +386,32 @@ def generate_adversaries(model, input_tensors, output_tensors, index):
 	plt.savefig(f'adversarial_example{index}.png', dpi=410)
 	plt.close()
 
+	if original_class != adversarial_class:
+		return 1
+	else:
+		return 0
+
 	return
 
 def adversarial_test(dataloader, model, count=0):
 	size = len(dataloader.dataset)	
 	model.eval()
 	test_loss, correct = 0, 0
-	with torch.no_grad():
-		for x, y in dataloader:
-			x, y = x.to(device), y.to(device)
-			pred = model(x)
-			correct += (pred.argmax(1) == y).type(torch.float).sum().item()
-			break
+	adversaries, total = 0, 0
 
-	inputs, gradxinputs = [], []
-	for i in range(len(x)):
-		generate_adversaries(model, x, y, i)
-	accuracy = correct / size
-	print (f"Test accuracy: {int(correct)} / {size}")
+	for x, y in dataloader:
+		x, y = x.to(device), y.to(device)
+		pred = model(x)
+		correct += (pred.argmax(1) == y).type(torch.float).sum().item()
+
+		inputs, gradxinputs = [], []
+		for i in range(len(x)):
+			adversaries += generate_adversaries(model, x, y, i)
+			total += 1
+
+	print (adversaries, total)
+	adversarials = round(adversaries / total, 2) * 100
+	print (f"Adversarial percentage: {adversarials}")
 	model.train()
 	return
 
@@ -430,15 +443,19 @@ def test(dataloader, model, count=0):
 	return
 
 
-epochs = 30
+epochs = 3
 model = MediumNetwork()
 loss_fn = nn.CrossEntropyLoss() 
 optimizer = torch.optim.Adam(model.parameters())
+model.load_state_dict(torch.load('trained_models/fmnist_bench_pytorch.pth'))
+# for e in range(epochs):
+# 	print (f"Epoch {e+1} \n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+# 	train(train_dataloader, model, loss_fn, optimizer)
+# 	print ('\n')
 
-for e in range(epochs):
-	print (f"Epoch {e+1} \n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
-	train(train_dataloader, model, loss_fn, optimizer)
-	print ('\n')
+# torch.save(model.state_dict(), 'trained_models/fmnist_bench_pytorch.pth')
+
+model.load_state_dict(torch.load('trained_models/fmnist_bench_pytorch.pth'))
 
 adversarial_test(test_dataloader, model)
 

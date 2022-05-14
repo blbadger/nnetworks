@@ -3,7 +3,7 @@
 Deep learning models for classification, generation, attribution, and more. The base folder has a collection of models for computer vision: cNNs for image classification, image saliency, deep dream-style image generation via input modification, generative adversarial networks, adversarial examples, and more. 
 
 Sneak peeks:
-Input attribution during Fashion MNIST training
+Flower classification input attribution
 
 ![flower saliency](https://blbadger.github.io/neural_networks/flower_attributions1200.png)
 

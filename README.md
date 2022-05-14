@@ -1,13 +1,22 @@
 # nnetworks
 
-A collection of neural networks for image classification. `interprets` contains interpretable sequence-based deep learning models for tabular data input, and `connected` contains fully-connected neural networks built from scratch that classify MNIST handwritten digit images.
+Deep learning models for classification, generation, attribution, and more. The base folder has a collection of models for computer vision: cNNs for image classification, image saliency, deep dream-style image generation via input modification, generative adversarial networks, adversarial examples, and more. 
 
-cNN design was inspired by the official Tensorflow Keras introduction (https://www.tensorflow.org/tutorials/keras/classification) and load image (https://www.tensorflow.org/tutorials/load_data/images?hl=TR) tutorial. 
+Sneak peeks:
+Input attribution during Fashion MNIST training
 
-Contains a collection of snippets (NN_prep_snippets) to prepare test and training image datasets for a convolutional neural network (Deep_network) built with a Keras API (both sequential and functional models are presented) on a Tensorflow backend.
+![attribution]({{https://blbadger.github.io}}/neural_networks/attributions_highres_slow.gif)
 
-Deep_network architecture:
-![neural network architecture](https://github.com/blbadger/blbadger.github.io/blob/master/misc_images/cNN_architecture.png)
+Input gradient for adversarial example generation
 
-which accurately predicts cell genotype based on fluorescent microscopic images
-![classification](https://github.com/blbadger/blbadger.github.io/blob/master/neural_networks/nn_images_1.png)
+![adversarial example]({{https://blbadger.github.io}}/neural_networks/adversarial_gen_daisy.png)
+
+Latent space manifold with a MNIST GAN
+
+![manifold]({{https://blbadger.github.io}}/neural_networks/mnist_2latent_fig.png)
+
+See `interprets` for abstract sequence interpretation using language models. 
+
+See `connected` for mlp-style networks implemented from scratch in python and c++. 
+
+

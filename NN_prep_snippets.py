@@ -7,7 +7,7 @@ import os
 
 image_files = ['path/to/file.jpg', 'path/to/file2.png']
 
-image_directory = '/home/bbadger/Desktop/GFP_2/snap29'
+image_directory = '/home/bbadger/Desktop/Neural_networks'
 
 
 class Imageprep:

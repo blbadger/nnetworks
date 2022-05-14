@@ -5,8 +5,7 @@ Deep learning models for classification, generation, attribution, and more. The 
 Sneak peeks:
 Input attribution during Fashion MNIST training
 
-![attribution](https://blbadger.github.io/neural_networks/attributions_highres_slow.gif)
-
+![flower saliency](https://blbadger.github.io/neural_networks/flower_attributions1200.png)
 
 Input gradient for adversarial example generation
 

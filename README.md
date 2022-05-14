@@ -5,15 +5,16 @@ Deep learning models for classification, generation, attribution, and more. The 
 Sneak peeks:
 Input attribution during Fashion MNIST training
 
-![attribution]({{https://blbadger.github.io}}/neural_networks/attributions_highres_slow.gif)
+![attribution](https://blbadger.github.io/neural_networks/attributions_highres_slow.gif)
+
 
 Input gradient for adversarial example generation
 
-![adversarial example]({{https://blbadger.github.io}}/neural_networks/adversarial_gen_daisy.png)
+![adversarial example](https://blbadger.github.io/neural_networks/adversarial_gen_daisy.png)
 
 Latent space manifold with a MNIST GAN
 
-![manifold]({{https://blbadger.github.io}}/neural_networks/mnist_2latent_fig.png)
+![manifold](https://blbadger.github.io/neural_networks/mnist_2latent_fig.png)
 
 See `interprets` for abstract sequence interpretation using language models. 
 

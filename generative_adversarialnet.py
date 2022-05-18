@@ -1,6 +1,5 @@
-# deep_pytorch.py
-# A deep convolutional net for image classification
-# implemented with a functional pytorch model
+# generative_adversarialnets.py
+# GANs for image generation and latent space exploration
 
 # import standard libraries
 import time
@@ -21,7 +20,7 @@ import torchvision.transforms as transforms
 
 
 # dataset directory specification
-data_dir = pathlib.Path('../Neural_networks/flower_photos_2',  fname='Combined')
+data_dir = pathlib.Path('../flower_photos_2',  fname='Combined')
 
 image_count = len(list(data_dir.glob('*/*.jpg')))
 
@@ -57,7 +56,7 @@ class ImageDataset(Dataset):
 		img_path = os.path.join(self.image_name_ls[index])
 		image = torchvision.io.read_image(img_path) # convert image to tensor of ints , torchvision.io.ImageReadMode.GRAY
 		image = image / 255. # convert ints to floats in range [0, 1]
-		image = torchvision.transforms.Resize(size=[128, 128])(image)	
+		image = torchvision.transforms.Resize(size=[28, 28])(image)	
 
 		# assign label to be a tensor based on the parent folder name
 		label = os.path.basename(os.path.dirname(self.image_name_ls[index]))
@@ -191,7 +190,7 @@ class FCnet(nn.Module):
 	def __init__(self):
 
 		super().__init__()
-		self.input_transform = nn.Linear(28*28, 1024)
+		self.input_transform = nn.Linear(28*28*3, 1024)
 		self.d1 = nn.Linear(1024, 512)
 		self.d2 = nn.Linear(512, 256)
 		self.d3 = nn.Linear(256, 1)
@@ -221,7 +220,7 @@ class InvertedFC(nn.Module):
 
 	def __init__(self):
 		super().__init__()
-		self.input_transform = nn.Linear(1024, 28*28)
+		self.input_transform = nn.Linear(1024, 28*28*3)
 		self.d3 = nn.Linear(512, 1024)
 		self.d2 = nn.Linear(256, 512)
 		self.d1 = nn.Linear(100, 256)
@@ -309,7 +308,6 @@ def train_generative_adversaries(dataloader, discriminator, discriminator_optimi
 
 	for e in range(epochs):
 		print (f"Epoch {e+1} \n" + '~'*100)
-		print ('\n')
 		for batch, (x, y) in enumerate(dataloader):
 			if len(x) < minibatch_size:
 				break
@@ -337,14 +335,13 @@ def train_generative_adversaries(dataloader, discriminator, discriminator_optimi
 
 			if count % 50 == 0:
 				fixed_outputs = generator(fixed_input)
-				inputs = fixed_outputs.reshape(minibatch_size, 28, 28).detach().numpy()
-				show_batch(inputs, count // 50,  grayscale=True)
+				inputs = fixed_outputs.reshape(minibatch_size, 3, 28, 28).permute(0, 2, 3, 1).detach().numpy()
+				show_batch(inputs, count // 50,  grayscale=False)
 
 		ave_loss = float(total_loss) / count
 		elapsed_time = time.time() - start
 		print (f"Average Loss: {ave_loss:.04}")
 		print (f"Completed in {int(elapsed_time)} seconds")
-		start = time.time()
 	return
 
 
@@ -565,7 +562,7 @@ def test(dataloader, model, count=0, short=True):
 	model.train()
 	return
 
-epochs = 100
+epochs = 1000
 discriminator = FCnet()
 generator = InvertedFC()
 loss_fn = nn.BCELoss()
@@ -575,7 +572,7 @@ generator_optimizer = torch.optim.Adam(generator.parameters(), lr=2e-4, betas=(0
 # discriminator.load_state_dict(torch.load('trained_models/discriminator.pth'))
 # generator.load_state_dict(torch.load('trained_models/generator.pth'))
 
-train_dcgan_adversaries(train_dataloader, discriminator, discriminator_optimizer, generator, generator_optimizer, loss_fn, epochs)
+train_generative_adversaries(train_dataloader, discriminator, discriminator_optimizer, generator, generator_optimizer, loss_fn, epochs)
 torch.save(discriminator.state_dict(), 'trained_models/flower_discriminator.pth')
 torch.save(generator.state_dict(), 'trained_models/flower_generator.pth')
 

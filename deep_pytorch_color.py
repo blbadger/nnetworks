@@ -22,7 +22,7 @@ import matplotlib.pyplot as plt
 # dataset directory specification
 data_dir = pathlib.Path('../Neural_networks/flower_1',  fname='Combined')
 data_dir2 = pathlib.Path('../Neural_networks/flower_2', fname='Combined')
-# data_dir3 = pathlib.Path('../Neural_networks/flower_2', fname='Combined') # nnetworks_data/file
+data_dir3 = pathlib.Path('../Neural_networks/flower_2', fname='Combined') # nnetworks_data/file
 
 image_count = len(list(data_dir.glob('*/*.jpg')))
 
@@ -38,6 +38,7 @@ class ImageDataset(Dataset):
 	def __init__(self, img_dir, transform=None, target_transform=None, image_type='.png'):
 		# specify image labels by folder name 
 		self.img_labels = [item.name for item in data_dir.glob('*')]
+
 		# construct image name list: randomly sample 400 images for each epoch
 		images = list(img_dir.glob('*/*' + image_type))
 		random.shuffle(images)
@@ -74,7 +75,7 @@ batch_size = 16
 
 train_data = ImageDataset(data_dir, image_type='.jpg')
 test_data = ImageDataset(data_dir2, image_type='.jpg')
-# test_data2 = ImageDataset(data_dir3, image_type='.jpg')
+test_data2 = ImageDataset(data_dir3, image_type='.jpg')
 
 train_dataloader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
 test_dataloader = DataLoader(test_data, batch_size=batch_size, shuffle=False)
@@ -149,6 +150,7 @@ class MediumNetworkFull(nn.Module):
 		self.flatten = nn.Flatten()
 		self.relu = nn.ReLU()
 		self.softmax = nn.Softmax(dim=1)
+		self.sigmoid = nn.Sigmoid()
 		self.d1 = nn.Linear(8192, 512)
 		self.d2 = nn.Linear(512, 50)
 		self.d3 = nn.Linear(50, 5)
@@ -170,7 +172,7 @@ class MediumNetworkFull(nn.Module):
 		output = self.d2(output)
 		output = self.relu(output)
 		final_output = self.d3(output)
-		final_output = self.softmax(final_output)
+		final_output = self.sigmoid(final_output)
 		return final_output
 
 class MediumNetwork(nn.Module):
@@ -195,7 +197,6 @@ class MediumNetwork(nn.Module):
 		self.index1, self.index2, self.index3, self.index4 = [], [], [], []
 		self.batchnorm1 = nn.BatchNorm1d(512)
 		self.batchnorm2 = nn.BatchNorm1d(50)
-		self.dropout = nn.Dropout(0.1)
 		
 
 	def forward(self, model_input):
@@ -211,12 +212,8 @@ class MediumNetwork(nn.Module):
 
 		output = self.d1(output)
 		output = self.relu(output)
-		# output = self.dropout(output)
-
 		output = self.d2(output)
 		output = self.relu(output)
-		# output = self.dropout(output)
-
 		final_output = self.d3(output)
 		final_output = self.softmax(final_output)
 		return final_output
@@ -253,8 +250,9 @@ class InvertedMediumNet(nn.Module):
 		output = self.relu(output)
 		output = self.d1(output)
 
-		out = torch.reshape(output, (batch_size, 32, 16, 16)) # reshape for convolutions
+		out = torch.reshape(output, (16, 32, 16, 16)) # reshape for convolutions
 		out = self.max_pooling(out, discriminator.index4)
+	
 		out = self.relu(self.conv32(out))
 		out = self.max_pooling(out, discriminator.index3)
 		out = self.relu(self.conv16(out))
@@ -296,23 +294,31 @@ def gradientxinput(model, input_tensor, output_dim, max_normalized=False):
 
 	return gradientxinput
 
+def hidden_gradient(model, input_tensor, output_dim, max_normalized=False):
+	"""
+	 Compute a gradientxinput attribution score
 
-def hidden_gradient(model, input_tensor, output_dim):
-	activation = {}
-	def get_activation(name):
-		def hook(model, input, output):
-			activation[name] = output.detach()
-		return hook
+	 Args:
+		input: torch.Tensor() object of input
+		model: Transformer() class object, trained neural network
 
-	model.d1.register_forward_hook(get_activation('d1'))
-	x = torch.randn(1, 25)
-	output = model(input_tensor)
-	activation = activation['d1'][0][0].reshape(1).max()
+	 Returns:
+		gradientxinput: arr[float] of input attributions
 
+	"""
+
+	# change output to float
 	input_tensor.requires_grad = True
-	print (activation)
-	activation.backward(retain_graph=True)
+	output = model.forward(input_tensor)
+
+	# only scalars may be assigned a gradient
+	hidden_activation = model.conv64_2.bias[0]
+	hidden_activation += 0.1
+
+	# backpropegate output gradient to input
+	hidden_activation.backward(retain_graph=True)
 	gradient = input_tensor.grad
+
 	return gradient
 
 def loss_gradient(model, input_tensor, true_output, output_dim):
@@ -413,114 +419,64 @@ def train_generative_adversaries(dataloader, discriminator, discriminator_optimi
 	count = 0
 	total_loss = 0
 	start = time.time()
-	fixed_input = torch.randn(batch_size, 5)
 
 	for e in range(epochs):
-		print (f"Epoch {e+1} \n" + "~"*100)
+		print (f"Epoch {e+1} \n~~~~~~~~~~~~~~~~~~~~~~~")
 		print ('\n')
 		for batch, (x, y) in enumerate(dataloader):
-			if len(x) < batch_size:
-				continue
 			count += 1
-			_ = discriminator(x) # initialize the index arrays
 
 			discriminator_optimizer.zero_grad()
-			random_output = torch.randn(batch_size, 5)
+			_ = discriminator(x) # initialize the index arrays
+
+			random_output = torch.randn(16, 5)
 			generated_samples = generator(random_output)
-			input_dataset = torch.cat([x, generated_samples]) # or torch.cat([x, torch.rand(x.shape)])
-			output_labels = torch.cat([torch.ones(len(y), dtype=int), torch.zeros(len(generated_samples), dtype=int)])
-			discriminator_prediction = discriminator(input_dataset)
+			# input_dataset = torch.cat([x, generated_samples]) # or torch.cat([x, torch.rand(x.shape)])
+			# output_labels = torch.cat([torch.ones(len(y), dtype=int), torch.zeros(len(generated_samples), dtype=int)])
+			discriminator_prediction = discriminator(generated_samples)
+			output_labels = torch.zeros(len(y), dtype=int) # generated examples have label 0
 			discriminator_loss = loss_fn(discriminator_prediction, output_labels)
-			
+			discriminator_loss.backward()
+
+			discriminator_prediction = discriminator(x)
+			output_labels = torch.ones(len(y), dtype=int) # true examples have label 1
+			discriminator_loss = loss_fn(discriminator_prediction, output_labels)
 			discriminator_loss.backward()
 			discriminator_optimizer.step()
-			# print (f'Discriminator loss: {discriminator_loss}')
-			# print (discriminator.d2.bias.norm())
+			print (f'Discriminator loss: {discriminator_loss}')
+			print (discriminator.d2.bias.norm())
 
 			_ = discriminator(x) # reset index dims to 16-element minibatch size
-			generator_optimizer.zero_grad()
+				
 			generated_outputs = generator(random_output)
 			discriminator_outputs = discriminator(generated_outputs)
 			generator_loss = loss_fn(discriminator_outputs, torch.ones(len(y), dtype=int)) # pretend that all generated inputs are in the dataset
 
+			generator_optimizer.zero_grad()
 			generator_loss.backward()
 			generator_optimizer.step()
 
 			print (generator.d2.bias.norm())
 			print (discriminator_prediction)
 			print (generator_loss)
+			plt.axis('off')
+			output = generator(random_output)
+			plt.imshow((generated_outputs[0] / torch.max(generated_outputs[0])).reshape(3, 256, 256).permute(1, 2, 0).detach().numpy())
+			plt.tight_layout()
+			plt.savefig('gan{0:04d}'.format(count), dpi=410)
+			plt.close()
 
-			# plt.axis('off')
-			# output = generator(random_output)
-			# plt.imshow((generated_outputs[0] / torch.max(generated_outputs[0])).reshape(3, 256, 256).permute(1, 2, 0).detach().numpy())
-			# plt.tight_layout()
-			# plt.savefig('gan{0:04d}'.format(count), dpi=410)
-			# plt.close()
-
-			fixed_outputs = generator(fixed_input)
-			inputs = (fixed_outputs / torch.max(fixed_outputs)).reshape(batch_size, 3, 256, 256).permute(0, 2, 3, 1).detach().numpy()
-			show_batch(inputs, count)
-
+		torch.save(generator.state_dict(), 'trained_models/generator_large.pth')
+		torch.save(discriminator.state_dict(), 'trained_models/discriminator_large.pth')
 		ave_loss = float(total_loss) / count
 		elapsed_time = time.time() - start
 		print (f"Average Loss: {ave_loss:.04}")
 		print (f"Completed in {int(elapsed_time)} seconds")
 		start = time.time()
-		torch.save(generator.state_dict(), 'trained_models/convgenerator.pth')
-		torch.save(discriminator.state_dict(), 'trained_models/convdiscriminator.pth')
 
 	return
 
-# def show_batch(input_batch, output_batch, gradxinput_batch, individuals=False, count=0):
-# 	"""
-# 	Show a batch of images with gradientxinputs superimposed
-
-# 	Args:
-# 		input_batch: arr[torch.Tensor] of input images
-# 		output_batch: arr[torch.Tensor] of classification labels
-# 		gradxinput_batch: arr[torch.Tensor] of attributions per input image
-# 	kwargs:
-# 		individuals: Bool, if True then plots 1x3 image figs for each batch element
-# 		count: int
-
-# 	returns:
-# 		None (saves .png img)
-
-# 	"""
-# 	if individuals:
-# 		for n in range(len(input_batch)):
-# 			ax = plt.subplot(1, 3, 1)
-# 			plt.axis('off')
-# 			plt.title('Input')
-# 			plt.imshow(input_batch[n], alpha=1)
-# 			ax = plt.subplot(1, 3, 2)
-# 			plt.axis('off')
-# 			plt.title('Gradient * Input')
-# 			plt.imshow(gradxinput_batch[n], cmap='inferno', alpha=1)
-# 			ax = plt.subplot(1, 3, 3)
-# 			plt.axis('off')
-# 			plt.title('Combined')
-# 			plt.imshow(input_batch[n], alpha=1)
-# 			plt.imshow(gradxinput_batch[n], cmap='inferno', alpha=0.5)
-# 			plt.tight_layout()
-# 			plt.savefig(f'attribution{n}.png', dpi=410)
-# 			plt.close()
-
-# 	plt.figure(figsize=(15, 10))
-# 	for n in range(len(input_batch)):
-# 		ax = plt.subplot(4, 4, n+1) # expects a batch of size 16
-# 		plt.axis('off')
-# 		# plt.title(class_names[int(output_batch[n])].title())
-# 		plt.imshow(input_batch[n], alpha=1)
-# 		# plt.imshow(gradxinput_batch[n], cmap='inferno', alpha=1)
-
-# 	plt.tight_layout()
-# 	# plt.show()
-# 	plt.savefig('flower_attributions{0:04d}.png'.format(count), dpi=410)
-# 	plt.close()
-# 	return
-
-def show_batch(input_batch, count=0, grayscale=False):
+def show_batch(input_batch, output_batch, gradxinput_batch, individuals=False, count=0):
 	"""
 	Show a batch of images with gradientxinputs superimposed
 
@@ -536,19 +492,36 @@ def show_batch(input_batch, count=0, grayscale=False):
 		None (saves .png img)
 
 	"""
+	if individuals:
+		for n in range(len(input_batch)):
+			ax = plt.subplot(1, 3, 1)
+			plt.axis('off')
+			plt.title('Input')
+			plt.imshow(input_batch[n], alpha=1)
+			ax = plt.subplot(1, 3, 2)
+			plt.axis('off')
+			plt.title('Gradient * Input')
+			plt.imshow(gradxinput_batch[n], cmap='inferno', alpha=1)
+			ax = plt.subplot(1, 3, 3)
+			plt.axis('off')
+			plt.title('Combined')
+			plt.imshow(input_batch[n], alpha=1)
+			plt.imshow(gradxinput_batch[n], cmap='inferno', alpha=0.5)
+			plt.tight_layout()
+			plt.savefig(f'attribution{n}.png', dpi=410)
+			plt.close()
 
 	plt.figure(figsize=(15, 10))
-	for n in range(6):
-		ax = plt.subplot(2, 3, n+1)
+	for n in range(len(input_batch)):
+		ax = plt.subplot(4, 4, n+1) # expects a batch of size 16
 		plt.axis('off')
-		if grayscale:
-			plt.imshow(input_batch[n], cmap='gray')
-		else:
-			plt.imshow(input_batch[n])
-		plt.tight_layout()
+		# plt.title(class_names[int(output_batch[n])].title())
+		plt.imshow(input_batch[n], alpha=1)
+		# plt.imshow(gradxinput_batch[n], cmap='inferno', alpha=1)
 
 	plt.tight_layout()
-	plt.savefig('original_flowers{0:04d}.png'.format(count), dpi=410)
+	# plt.show()
+	plt.savefig('flower_attributions{0:04d}.png'.format(count), dpi=410)
 	plt.close()
 	return
 
@@ -569,13 +542,13 @@ def plot_adversaries(model, input_tensors, output_tensors, index, count):
 	input_grad = loss_gradient(model, single_input, output_tensors[index], 5)
 	input_grad = torch.rand(input_grad.shape)
 	input_grad /= torch.max(input_grad)
-	added_input = single_input + 0.15*input_grad
+	added_input = single_input + 0.1*input_grad
 	original_pred = model(single_input)
 	grad_pred = model(0.01*input_grad)
 	adversarial_pred = model(added_input)
 
 	input_img = single_input.reshape(3, 256, 256).permute(1, 2, 0).detach().numpy()
-	gradient = 15*input_grad.reshape(3, 256, 256).permute(1, 2, 0).detach().numpy()
+	gradient = input_grad.reshape(3, 256, 256).permute(1, 2, 0).detach().numpy()
 	added_input = added_input.reshape(3, 256, 256).permute(1, 2, 0).detach().numpy()
 
 	original_class = class_names[int(original_pred.argmax(1))].title()
@@ -594,7 +567,7 @@ def plot_adversaries(model, input_tensors, output_tensors, index, count):
 	plt.imshow(input_img, alpha=1)
 	ax = plt.subplot(1, 3, 2)
 	plt.axis('off')
-	plt.title('{}% {}'.format(adversarial_confidence, adversarial_class))
+	plt.title('Random Addition')
 	plt.imshow(gradient, alpha=1)
 	ax = plt.subplot(1, 3, 3)
 	plt.axis('off')
@@ -643,7 +616,7 @@ def generate_adversaries(model, input_tensors, output_tensors, index, count):
 
 	return
 
-def og_generate_input(model, input_tensors, output_tensors, index, count):
+def hidden_input_gen(model, input_tensors, output_tensors, index, count):
 	"""
 	Generates an input for a given output
 
@@ -662,7 +635,7 @@ def og_generate_input(model, input_tensors, output_tensors, index, count):
 
 	for i in range(1000):
 		single_input = single_input.detach() # remove the gradient for the input (if present)
-		input_grad = loss_gradient(model, single_input, output_tensors[index], 5) # compute input gradient
+		input_grad = hidden_gradient(model, single_input, output_tensors[index], 5) # compute input gradient
 		last_input = single_input.clone()
 		single_input = single_input - 10*input_grad # gradient descent step
 
@@ -692,29 +665,24 @@ def generate_input(model, input_tensors, output_tensors, index, count):
 		None (saves .png image)
 	"""
 
-	target_input = input_tensors[index].reshape(1, 3, 256, 256)
-	single_input = target_input.clone()
-	original_input = torch.clone(input_tensors[index]).reshape(3, 256, 256).permute(1, 2, 0).detach().numpy()
+	original_input = input_tensors[index].reshape(1, 3, 256, 256)
+	single_input = original_input.clone()
+	target_output = torch.tensor([0], dtype=int)
+	# single_input = torch.zeros(1, 3, 256, 256) # uniform distribution initialization
 
-	single_input = torch.rand(1, 3, 256, 256) # uniform distribution initialization
-	original_input = torch.clone(single_input[index]).reshape(3, 256, 256).permute(1, 2, 0).detach().numpy()
-	target_output = torch.tensor([1], dtype=int)
-
-	for i in range(500):
+	for i in range(100):
 		single_input = single_input.detach() # remove the gradient for the input (if present)
-		predicted_output = output_tensors[index].argmax(0)
+		# predicted_output = output_tensors[index].argmax(0)
 		input_grad = loss_gradient(model, single_input, target_output, 5) # compute input gradient
-		input_grad /= torch.max(input_grad)
-		single_input = single_input - 0.1 * torch.sign(input_grad) # gradient descent step
-		if i % 10 == 0 and i < 50:
-			single_input = torchvision.transforms.GaussianBlur(5)(single_input)
+		single_input = single_input - 0.01*torch.sign(input_grad) # gradient descent step
 
-	single_input = single_input.clone() / torch.max(single_input)
-	target_input = single_input.reshape(3, 256, 256).permute(1, 2, 0).detach().numpy()
-	target_name = class_names[1].title()
+	single_input = single_input.clone() / torch.max(single_input) 
+	single_input = single_input.reshape(3, 256, 256).permute(1, 2, 0).detach().numpy()
+	original_input = original_input.reshape(3, 256, 256).permute(1, 2, 0).detach().numpy()
+	target_name = class_names[int(target_output)].title()
 	original_name = class_names[int(output_tensors[index])].title()
-	print (output_tensors[index], original_name)
 
+	plt.figure(figsize=(9, 5))
 	plt.subplot(1, 2, 1)
 	plt.axis('off')
 	plt.title(f'{original_name}')
@@ -723,10 +691,8 @@ def generate_input(model, input_tensors, output_tensors, index, count):
 	plt.subplot(1, 2, 2)
 	plt.axis('off')
 	plt.title(f'{target_name}')
-	plt.imshow(target_input, alpha=1)
-
-
-	plt.savefig('adversarial_example{0:04d}.png'.format(count), dpi=410)
+	plt.imshow(single_input, alpha=1)
+	plt.savefig('generated_input{0:04d}.png'.format(count), dpi=300)
 	plt.close()
 
 	return
@@ -741,8 +707,9 @@ def adversarial_test(dataloader, model, count=0):
 			break
 
 	inputs, gradxinputs = [], []
-	for i in range(1):
-		generate_input(model, x, y, i, count=count)
+	for i in range(10):
+		# generate_input(model, x, y, i, count=i)
+		plot_adversaries(model, x, y, i, count=i)
 	model.train()
 	return
 
@@ -776,47 +743,61 @@ def test(dataloader, model, count=0, short=True):
 	return
 
 
-epochs = 1000
-discriminator = MediumNetwork()
-generator = InvertedMediumNet()
+epochs = 40
+# generator = InvertedMediumNet()
+# discriminator = MediumNetwork()
+model = MediumNetworkFull()
 loss_fn = nn.CrossEntropyLoss() 
-# discriminator_optimizer = torch.optim.Adam(discriminator.parameters(), lr=2e-4, betas=(0.5, 0.999)) #dcgan params
-# generator_optimizer = torch.optim.Adam(generator.parameters(), lr=2e-4, betas=(0.5, 0.999)) #dcgan params
-# train_generative_adversaries(train_dataloader, discriminator, discriminator_optimizer, generator, generator_optimizer, loss_fn, epochs)
+# d_optimizer = torch.optim.Adam(discriminator.parameters(), lr=0.0001)
+# g_optimizer = torch.optim.Adam(generator.parameters(), lr=0.0001)
 # train(train_dataloader, model, loss_fn, optimizer, epochs)
 # torch.save(model.state_dict(), 'trained_models/flowernet.pth')
-model = MediumNetworkFull()
 
 model.load_state_dict(torch.load('trained_models/flowernet.pth'))
 # test(test_dataloader, model)
 adversarial_test(test_dataloader, model, 0)
+# train_generative_adversaries(train_dataloader, discriminator, d_optimizer, generator, g_optimizer, loss_fn, epochs)
+
+
+generator.load_state_dict(torch.load('trained_models/generator_large.pth'))
+discriminator.load_state_dict(torch.load('trained_models/discriminator_large.pth'))
+
+
+with torch.no_grad():
+	for batch, (x, y) in enumerate(train_dataloader):
+		_ = discriminator(x)
+		x = x[0].reshape(3, 256, 256).permute(1, 2, 0).detach().numpy()
+		plt.imshow(x)
+		plt.show()
+		plt.close()
+		break
+	random_output = torch.randn(16, 5)
+	for i in range(1):
+		random_output[0][0] += 0.01
+		generated_outputs = generator(random_output)
+		plt.imshow((generated_outputs[0] / torch.max(generated_outputs[0])).reshape(3, 256, 256).permute(1, 2, 0).detach().numpy())
+		plt.tight_layout()
+		plt.savefig('shifted_gan{0:04d}'.format(i), dpi=410)
+		plt.close()
 
 
 
+	for batch, (x, y) in enumerate(train_dataloader):
+		_ = discriminator(x)
+		x = x[0].reshape(3, 256, 256).permute(1, 2, 0).detach().numpy()
+		plt.imshow(x)
+		plt.show()
+		plt.close()
+		break
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+	random_output = torch.randn(16, 5)
+	for i in range(1, 2):
+		random_output[0][0] += 0.01
+		generated_outputs = generator(random_output)
+		plt.imshow((generated_outputs[0] / torch.max(generated_outputs[0])).reshape(3, 256, 256).permute(1, 2, 0).detach().numpy())
+		plt.tight_layout()
+		plt.savefig('shifted_gan{0:04d}'.format(i), dpi=410)
+		plt.close()
 
 
 

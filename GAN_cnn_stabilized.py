@@ -1,6 +1,5 @@
-# deep_pytorch.py
-# A deep convolutional net for image classification
-# implemented with a functional pytorch model
+# GAN_cnn_stabilized.py
+# DCGAN -style convolutional generative adversarial network
 
 # import standard libraries
 import time
@@ -19,9 +18,11 @@ import torchvision
 import matplotlib.pyplot as plt  
 import torchvision.transforms as transforms
 
+# files.upload() # upload flower_photos_2
+# !unzip flower_photos_2.zip
 
 # dataset directory specification
-data_dir = pathlib.Path('../Neural_networks/flower_photos_2',  fname='Combined')
+data_dir = pathlib.Path('../flower_photos_2',  fname='Combined')
 
 image_count = len(list(data_dir.glob('*/*.jpg')))
 
@@ -56,6 +57,7 @@ class ImageDataset(Dataset):
 		image = torchvision.io.read_image(img_path) # convert image to tensor of ints , torchvision.io.ImageReadMode.GRAY
 		image = image / 255. # convert ints to floats in range [0, 1]
 		image = torchvision.transforms.Resize(size=[128, 128])(image)	
+		image = torchvision.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))(image)	
 
 		# assign label to be a tensor based on the parent folder name
 		label = os.path.basename(os.path.dirname(self.image_name_ls[index]))
@@ -70,31 +72,9 @@ class ImageDataset(Dataset):
 		return image, label_tens
 
 # specify batch size
-minibatch_size = 64
-
-def load_fmnist():
-	train_data = torchvision.datasets.FashionMNIST(
-		root = '../fashion_mnist/FashionMNIST',
-		train = True,
-		transform = torchvision.transforms.ToTensor()
-		)
-
-	test_data = torchvision.datasets.FashionMNIST(
-		root = '../fashion_mnist/FashionMNIST',
-		train = False,
-		transform = torchvision.transforms.ToTensor()
-		)
-
-	class_names = ['T-shirt/top', 'Trouser', 'Pullover', 'Dress', 'Coat',
-				   'Sandal', 'Shirt', 'Sneaker', 'Bag', 'Ankle boot']
-
-	return train_data, test_data, class_names
-
-
+minibatch_size = 128
 train_data = ImageDataset(data_dir, image_type='.jpg')
 train_dataloader = DataLoader(train_data, batch_size=minibatch_size, shuffle=True)
-
-# test_dataloader = DataLoader(test_data, batch_size=minibatch_size, shuffle=False)
 
 # send model to GPU if available
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -104,6 +84,7 @@ class StableDiscriminator(nn.Module):
 
 	def __init__(self):
 		super(StableDiscriminator, self).__init__()
+		# switch second index to 3 for color
 		self.conv1 = nn.Conv2d(3, 64, 4, stride=2, padding=1) # 3x128x128 image input
 		self.conv2 = nn.Conv2d(64, 128, 4, stride=2, padding=1)
 		self.conv3 = nn.Conv2d(128, 256, 4, stride=2, padding=1)
@@ -153,6 +134,7 @@ class StableGenerator(nn.Module):
 		self.conv2 = nn.ConvTranspose2d(512, 256, 4, stride=2, padding=1)
 		self.conv3 = nn.ConvTranspose2d(256, 128, 4, stride=2, padding=1)
 		self.conv4 = nn.ConvTranspose2d(128, 64, 4, stride=2, padding=1)
+	# switch second index to 3 for color images
 		self.conv5 = nn.ConvTranspose2d(64, 3, 4, stride=2, padding=1) # end with shape minibatch_sizex3x128x128
 
 		self.relu = nn.ReLU()
@@ -167,7 +149,7 @@ class StableGenerator(nn.Module):
 	def forward(self, input):
 		input = input.reshape(minibatch_size, 100, 1, 1)
 		transformed_input = self.input_transform(input)
-		# transformed_input = fc_transform(input).reshape(minibatch_size, 1024, 4, 4)
+		# transformed_input = self.fc_transform(input).reshape(minibatch_size, 1024, 4, 4)
 		out = self.conv1(transformed_input)
 		out = self.relu(out)
 		out = self.batchnorm1(out)
@@ -243,6 +225,7 @@ def show_batch(input_batch, count=0, grayscale=False):
 
 	plt.style.use('dark_background')
 	plt.tight_layout()
+	plt.show()
 	plt.savefig('gan_set{0:04d}.png'.format(count), dpi=410)
 	plt.close()
 	return
@@ -254,27 +237,29 @@ def train_dcgan_adversaries(dataloader, discriminator, discriminator_optimizer, 
 	count = 0
 	total_loss = 0
 	start = time.time()
-	fixed_input = torch.randn(minibatch_size, 100)
+	fixed_input = torch.randn(minibatch_size, 100).to(device)
 
 	for e in range(epochs):
 		print (f"Epoch {e+1} \n" + "~"*100)
 		for batch, (x, y) in enumerate(dataloader):
+			x = x.to(device)
+			show_batch(x, count)
 			if len(x) < minibatch_size:
 				break
 			count += 1
 			print (count)
 			# initialization
 			discriminator_optimizer.zero_grad()
-			random_output = torch.randn(minibatch_size, 100)
+			random_output = torch.randn(minibatch_size, 100).to(device)
 
 			# train discriminator on real samples
-			output_labels = torch.ones(len(y))
+			output_labels = torch.ones(len(y)).to(device)
 			discriminator_prediction = discriminator(x).reshape(minibatch_size)
 			discriminator_loss = loss_fn(discriminator_prediction, output_labels)
 			discriminator_loss.backward()
 
 			# train discriminator on generated samples
-			output_labels = torch.zeros(len(y))
+			output_labels = torch.zeros(len(y)).to(device)
 			generated_samples = generator(random_output)
 			discriminator_prediction = discriminator(generated_samples).reshape(minibatch_size)
 			discriminator_loss = loss_fn(discriminator_prediction, output_labels)
@@ -283,27 +268,33 @@ def train_dcgan_adversaries(dataloader, discriminator, discriminator_optimizer, 
 
 			generated_outputs = generator(random_output)
 			discriminator_outputs = discriminator(generated_outputs).reshape(minibatch_size)
-			generator_loss = loss_fn(discriminator_outputs, torch.ones(len(y))) # pretend that all generated inputs are in the dataset
+			generator_loss = loss_fn(discriminator_outputs, torch.ones(len(y)).to(device)) # pretend that all generated inputs are in the dataset
 
 			generator_optimizer.zero_grad()
 			generator_loss.backward()
 			generator_optimizer.step()
 
-		fixed_outputs = generator(fixed_input)
-		inputs = fixed_outputs.reshape(minibatch_size, 3, 128, 128).permute(0, 2, 3, 1).detach().numpy()
+		if e % 200 == 0:
+			images = generator(fixed_input)
+			print (images.shape)
+			images = images.reshape(128, 3, 128, 128).permute(0, 2, 3, 1).cpu().detach().numpy()
+			show_batch(images, 0, grayscale=True)
+			torch.save(discriminator.state_dict(), 'flower_discriminator.pth')
+			torch.save(generator.state_dict(), 'flower_generator.pth')
 
-		show_batch(inputs, e)
-		print (discriminator_prediction)
-		print (generator_loss)
-		print (discriminator_loss)
+		fixed_outputs = generator(fixed_input)
+		inputs = fixed_outputs.reshape(minibatch_size, 3, 128, 128).permute(0, 2, 3, 1).cpu().detach().numpy()
+
+		# show_batch(inputs, e, grayscale=True)
+		# print (discriminator_prediction)
+		print ('Generator loss: ', generator_loss)
+		print ('Discriminator loss: ', discriminator_loss)
 
 		ave_loss = float(total_loss) / count
 		elapsed_time = time.time() - start
 		print (f"Average Loss: {ave_loss:.04}")
 		print (f"Completed in {int(elapsed_time)} seconds")
 		start = time.time()
-		torch.save(generator.state_dict(), 'trained_models/generator.pth')
-		torch.save(discriminator.state_dict(), 'trained_models/discriminator.pth')
 	return
 
 def test(dataloader, model, count=0, short=True):
@@ -335,9 +326,19 @@ def test(dataloader, model, count=0, short=True):
 	model.train()
 	return
 
-epochs = 1000
-discriminator = StableDiscriminator()
-generator = StableGenerator(minibatch_size)
+# def weights_init(m):
+#     classname = m.__class__.__name__
+#     if classname.find('Conv') != -1:
+#         nn.init.normal_(m.weight.data, 0.0, 0.02)
+#     elif classname.find('BatchNorm') != -1:
+#         nn.init.normal_(m.weight.data, 1.0, 0.02)
+#         nn.init.constant_(m.bias.data, 0)
+
+epochs = 3000
+discriminator = StableDiscriminator().to(device)
+generator = StableGenerator(minibatch_size).to(device)
+# discriminator.apply(weights_init)
+# generator.apply(weights_init)
 loss_fn = nn.BCELoss()
 discriminator_optimizer = torch.optim.Adam(discriminator.parameters(), lr=2e-4, betas=(0.5, 0.999))
 generator_optimizer = torch.optim.Adam(generator.parameters(), lr=2e-4, betas=(0.5, 0.999))
@@ -346,15 +347,16 @@ generator_optimizer = torch.optim.Adam(generator.parameters(), lr=2e-4, betas=(0
 # generator.load_state_dict(torch.load('trained_models/generator.pth'))
 
 train_dcgan_adversaries(train_dataloader, discriminator, discriminator_optimizer, generator, generator_optimizer, loss_fn, epochs)
-torch.save(discriminator.state_dict(), 'trained_models/flower_discriminator.pth')
-torch.save(generator.state_dict(), 'trained_models/flower_generator.pth')
+torch.save(discriminator.state_dict(), 'flower_discriminator.pth')
+torch.save(generator.state_dict(), 'flower_generator.pth')
 
+files.download('flower_discriminator.pth')
+files.download('flower_generator.pth')
 
 # generator.load_state_dict(torch.load('trained_models/fmnist_fcgenerator.pth'))
 # discriminator.load_state_dict(torch.load('trained_models/fmnist_fcdiscriminator.pth'))
 
-
-fixed_input = torch.randn(1, 100)
+fixed_input = torch.randn(1, 100, 1, 1)
 
 final_input = fixed_input.clone()
 for i in range(10):
@@ -367,5 +369,9 @@ for i in range(10):
 		new_input[0][80:100] += 0.25 * (j+1)
 		final_input = torch.cat([final_input, new_input])
 
-images = generator(final_input[1:101]).reshape(len(fixed_input[0]), 28, 28).detach().numpy()
+fixed_input = torch.randn(128, 100, 1, 1).to(device)
+# images = generator(final_input[1:101])
+images = generator(fixed_input)
+print (images.shape)
+images = images.reshape(128, 3, 128, 128).permute(0, 2, 3, 1).cpu().detach().numpy()
 show_batch(images, 0, grayscale=True)

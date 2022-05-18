@@ -1,6 +1,5 @@
-# fmnist_test.py
-# A deep convolutional net for image classification
-# implemented with a functional pytorch model
+# fmnist_gpu.py
+# MLP-style model with GPU acceleration for latent space exploration.
 
 # import standard libraries
 import time
@@ -71,8 +70,8 @@ class ImageDataset(Dataset):
 		return image, label_tens
 
 
-transform = transforms.Compose(
-    [transforms.ToTensor()]
+tensorify_and_normalize = transforms.Compose(
+    [transforms.ToTensor(), transforms.Normalize(0.5, 0.5)]
 )
 
 # specify batch size
@@ -80,7 +79,7 @@ minibatch_size = 64
 train_data = torchvision.datasets.FashionMNIST(
 	root = '.',
 	train = True,
-	transform = transform,
+	transform = tensorify_and_normalize,
   download = True
 	)
 

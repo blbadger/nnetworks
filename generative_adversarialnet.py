@@ -56,7 +56,7 @@ class ImageDataset(Dataset):
 		img_path = os.path.join(self.image_name_ls[index])
 		image = torchvision.io.read_image(img_path) # convert image to tensor of ints , torchvision.io.ImageReadMode.GRAY
 		image = image / 255. # convert ints to floats in range [0, 1]
-		image = torchvision.transforms.Resize(size=[28, 28])(image)	
+		image = torchvision.transforms.Resize(size=[128, 128])(image)	
 
 		# assign label to be a tensor based on the parent folder name
 		label = os.path.basename(os.path.dirname(self.image_name_ls[index]))
@@ -357,6 +357,8 @@ def train_colorgan_adversaries(dataloader, discriminator, discriminator_optimize
 		print (f"Epoch {e+1} \n" + "~"*100)
 		print ('\n')
 		for batch, (x, y) in enumerate(dataloader):
+			print (x.shape)
+			show_batch(x.reshape(minibatch_size, 3, 128, 128).permute(0, 2, 3, 1).detach().numpy(), e)
 			count += 1
 			_ = discriminator(x) # initialize the index arrays
 
@@ -572,7 +574,7 @@ generator_optimizer = torch.optim.Adam(generator.parameters(), lr=2e-4, betas=(0
 # discriminator.load_state_dict(torch.load('trained_models/discriminator.pth'))
 # generator.load_state_dict(torch.load('trained_models/generator.pth'))
 
-train_generative_adversaries(train_dataloader, discriminator, discriminator_optimizer, generator, generator_optimizer, loss_fn, epochs)
+train_colorgan_adversaries(train_dataloader, discriminator, discriminator_optimizer, generator, generator_optimizer, loss_fn, epochs)
 torch.save(discriminator.state_dict(), 'trained_models/flower_discriminator.pth')
 torch.save(generator.state_dict(), 'trained_models/flower_generator.pth')
 

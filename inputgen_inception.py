@@ -17,10 +17,63 @@ from torch.utils.data import DataLoader, Dataset
 import torchvision
 import matplotlib.pyplot as plt
 
+# dataset directory specification
+data_dir = pathlib.Path('../flower_photos_2',  fname='Combined')
 
+image_count = len(list(data_dir.glob('*/*.jpg')))
+class_names = [item.name for item in data_dir.glob('*') 
+			   if item.name not in ['._.DS_Store', '._DS_Store', '.DS_Store']]
+
+class ImageDataset(Dataset):
+	"""
+	Creates a dataset from images classified by folder name.  Random
+	sampling of images to prevent overfitting
+	"""
+
+	def __init__(self, img_dir, transform=None, target_transform=None, image_type='.png'):
+		# specify image labels by folder name 
+		self.img_labels = [item.name for item in data_dir.glob('*')]
+
+		# construct image name list: randomly sample images for each epoch
+		images = list(img_dir.glob('*/*' + image_type))
+		random.shuffle(images)
+		self.image_name_ls = images[:800]
+
+		self.img_dir = img_dir
+		self.transform = transform
+		self.target_transform = target_transform
+
+	def __len__(self):
+		return len(self.image_name_ls)
+
+	def __getitem__(self, index):
+		# path to image
+		img_path = os.path.join(self.image_name_ls[index])
+		image = torchvision.io.read_image(img_path) # convert image to tensor of ints , torchvision.io.ImageReadMode.GRAY
+		image = image / 255. # convert ints to floats in range [0, 1]
+		image = torchvision.transforms.Resize(size=[256, 256])(image)	
+		# image = torchvision.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))(image)	
+
+		# assign label to be a tensor based on the parent folder name
+		label = os.path.basename(os.path.dirname(self.image_name_ls[index]))
+
+		# convert image label to tensor
+		label_tens = torch.tensor(self.img_labels.index(label))
+		if self.transform:
+			image = self.transform(image)
+		if self.target_transform:
+			label = self.target_transform(label)
+
+		return image, label_tens
+
+# specify batch size
+minibatch_size = 16
+train_data = ImageDataset(data_dir, image_type='.jpg')
+train_dataloader = DataLoader(train_data, batch_size=minibatch_size, shuffle=True)
 # send model to GPU if available
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print (f"Device: {device}")
+
 
 activation = {}
 def get_activation(name):
@@ -28,7 +81,7 @@ def get_activation(name):
         activation[name] = output.detach()
     return hook
 
-def generate_input(model, input_tensors, output_tensors, index, count, random_input=True):
+def generate_singleinput(model, input_tensors, output_tensors, index, count, random_input=True):
 	"""
 	Generates an input for a given output
 
@@ -109,6 +162,65 @@ def generate_input(model, input_tensors, output_tensors, index, count, random_in
 
 	return target_input
 
+def generate_inputbatch(model, input_tensors, output_tensors, index, count, minibatch_size, random_input=False):
+	"""
+	Generates an input for a given output
+
+	Args:
+		input_tensor: torch.Tensor object, minibatch of inputs
+		output_tensor: torch.Tensor object, minibatch of outputs
+		index: int
+
+	returns:
+		None (saves .png image)
+	"""
+	seed = 999
+	random.seed(seed)
+	torch.manual_seed(seed)
+
+	class_index = 483
+	
+	for i in range(100):
+		if random_input:
+			input_tensor = (torch.rand(minibatch_size, 3, 256, 256))/25 + 0.5 # scaled distribution initialization
+		else:
+			input_tensor = input_tensors
+
+		input_tensor = input_tensor.to(device)
+		input_tensor = input_tensor.reshape(minibatch_size, 3, 256, 256)
+		original_input = torch.clone(input_tensor).reshape(minibatch_size, 3, 256, 256).permute(0, 2, 3, 1).cpu().detach().numpy()
+
+		target_tensor = torch.zeros(minibatch_size, 1000)
+		for j in range(len(target_tensor)):
+			target_tensor[j][class_index] = 100 - i
+			target_tensor[j][class_index + 1] = i
+
+		for k in range(100):
+			input_tensor = input_tensor.detach() # remove the gradient for the input (if present)
+			input_grad = target_tensor_gradient(model, input_tensor, target_tensor, minibatch_size) # compute input gradient
+			input_tensor = input_tensor - 0.15 * input_grad # gradient descent step
+			if i < 76:
+				input_tensor = torchvision.transforms.functional.gaussian_blur(input_tensor, 3)
+				if i % 5 == 0:
+					input_tensor = torch.nn.functional.interpolate(input_tensor, 256)
+				elif i % 5 == 1:
+					input_tensor = torch.nn.functional.interpolate(input_tensor, 128)
+				elif i % 5 == 2:
+					input_tensor = torch.nn.functional.interpolate(input_tensor, 160)
+				elif i % 5 == 3:
+					input_tensor = torch.nn.functional.interpolate(input_tensor, 100)
+				elif i % 5 == 4:
+					input_tensor = torch.nn.functional.interpolate(input_tensor, 200)
+
+			input_tensor = torchvision.transforms.ColorJitter(0.01, 0.01, 0.01, 0.01)(input_tensor)
+			input_tensor = torch.nn.functional.interpolate(input_tensor, 256)
+
+		input_tensor = input_tensor.reshape(minibatch_size, 3, 256, 256).permute(0, 2, 3, 1).cpu().detach().numpy()
+		show_batch(input_tensor, count=i, grayscale=False)
+
+	return input_tensor
+
+
 def loss_gradient(model, input_tensor, true_output, output_dim):
 	"""
 	 Computes the gradient of the input wrt. the objective function
@@ -133,33 +245,66 @@ def loss_gradient(model, input_tensor, true_output, output_dim):
 	gradient = input_tensor.grad
 	return gradient
 
-
-def layer_gradient(model, input_tensor, true_output):
+def target_tensor_gradient(model, input_tensor, desired_output, minibatch_size):
 	"""
+	Compute the gradient of the output (logits) with respect to the input 
+	using an L1-normalized L1 metric to maximize the target classification.
+
+	Args:
+		model: torch.nn.model
+		input_tensor: torch.tensor object corresponding to the input image
+		true_output: torch.tensor object of the desired classification label
+
+	Returns:
+		gradient: torch.tensor.grad on the input tensor after backpropegation
 
 	"""
-	# model.fc.register_forward_hook(get_activation('fc'))
 	input_tensor.requires_grad = True
 	output = model(input_tensor)
-	# output_activations = activation['fc']
-
-	loss = torch.abs(200 - output[0][int(true_output)]) + 0.001 * torch.abs(input_tensor).sum() # maximize output val and minimize L1 norm of the input
-	# print (loss)
-	# print (output[0][int(true_output)])
-	# print (max([i for i in output[0][:]]))
+	loss = torch.sum(desired_output - output) + 0.001 * torch.abs(input_tensor).sum() 
 	loss.backward()
 	gradient = input_tensor.grad
+
+	return gradient
+
+
+def layer_gradient(model, input_tensor, desired_output):
+	"""
+	Compute the gradient of the output (logits) with respect to the input 
+	using an L1-normalized L1 metric to maximize the target classification.
+
+	Args:
+		model: torch.nn.model
+		input_tensor: torch.tensor object corresponding to the input image
+		true_output: torch.tensor object of the desired classification label
+
+	Returns:
+		gradient: torch.tensor.grad on the input tensor after backpropegation
+
+	"""
+	input_tensor.requires_grad = True
+	output = model(input_tensor)
+	# maximize output val and minimize L1 norm of the input
+	loss = torch.abs(200 - output[0][int(true_output)]) + 0.001 * torch.abs(input_tensor).sum() 
+	loss.backward()
+	gradient = input_tensor.grad
+
 	return gradient
 
 
 def adversarial_test(dataloader, model, count=0):
 	model.eval()
 	ls = []
+	for x, y in train_dataloader:
+		break
 	for i in range(16):
-		ls.append(generate_input(model, [], [], i, count=count))
-	show_batch(ls, grayscale=True)
+		ls.append(generate_inputbatch(model, x, [], i, count, minibatch_size, random_input=False))
+	show_batch(ls, grayscale=False)
+	x = x.reshape(16, 3, 256, 256).permute(0, 2, 3, 1).cpu().detach().numpy()
+	show_batch(x, grayscale=False)
 	model.train()
 	return
+
 
 def show_batch(input_batch, count=0, grayscale=False):
 	"""
@@ -190,16 +335,10 @@ def show_batch(input_batch, count=0, grayscale=False):
 		plt.tight_layout()
 
 	plt.tight_layout()
-	# plt.savefig('original_flowers{0:04d}.png'.format(count), dpi=410)
-	plt.show()
+	plt.savefig('transformed_flowers{0:04d}.png'.format(count), dpi=410)
+	# plt.show()
 	plt.close()
 	return
-
-# file = wget.download('https://raw.githubusercontent.com/pytorch/hub/master/imagenet_classes.txt')
-
-# Read the categories
-# with open("imagenet_classes.txt", "r") as f:
-#     class_names = [s.strip() for s in f.readlines()]
 
 
 loss_fn = nn.CrossEntropyLoss()
@@ -207,5 +346,12 @@ model = torch.hub.load('pytorch/vision:v0.10.0', 'inception_v3', pretrained=True
 
 model.eval()
 adversarial_test(None, model, 0)
+
+
+
+
+
+
+
 
 

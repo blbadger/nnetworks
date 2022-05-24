@@ -86,7 +86,7 @@ class FCnet(nn.Module):
 	def __init__(self):
 
 		super().__init__()
-		self.input_transform = nn.Linear(64*64*3, 64*64*2)
+		self.input_transform = nn.Linear(64*64*3, 64*64)
 		self.d1 = nn.Linear(64*64, 2048)
 		self.d2 = nn.Linear(2048, 512)
 		self.d3 = nn.Linear(512, 1)

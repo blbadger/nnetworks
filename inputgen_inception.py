@@ -195,21 +195,22 @@ def generate_inputbatch(model, input_tensors, output_tensors, index, count, mini
 			target_tensor[j][class_index] = 100 - i
 			target_tensor[j][class_index + 1] = i
 
-		for k in range(100):
+		for k in range(10):
+			print (k)
 			input_tensor = input_tensor.detach() # remove the gradient for the input (if present)
 			input_grad = target_tensor_gradient(model, input_tensor, target_tensor, minibatch_size) # compute input gradient
 			input_tensor = input_tensor - 0.15 * input_grad # gradient descent step
-			if i < 76:
+			if k < 76:
 				input_tensor = torchvision.transforms.functional.gaussian_blur(input_tensor, 3)
-				if i % 5 == 0:
+				if k % 5 == 0:
 					input_tensor = torch.nn.functional.interpolate(input_tensor, 256)
-				elif i % 5 == 1:
+				elif k % 5 == 1:
 					input_tensor = torch.nn.functional.interpolate(input_tensor, 128)
-				elif i % 5 == 2:
+				elif k % 5 == 2:
 					input_tensor = torch.nn.functional.interpolate(input_tensor, 160)
-				elif i % 5 == 3:
+				elif k % 5 == 3:
 					input_tensor = torch.nn.functional.interpolate(input_tensor, 100)
-				elif i % 5 == 4:
+				elif k % 5 == 4:
 					input_tensor = torch.nn.functional.interpolate(input_tensor, 200)
 
 			input_tensor = torchvision.transforms.ColorJitter(0.01, 0.01, 0.01, 0.01)(input_tensor)
@@ -330,7 +331,6 @@ def show_batch(input_batch, count=0, grayscale=False):
 		if grayscale:
 			plt.imshow(input_batch[n], cmap='gray')
 		else:
-			print (input_batch[n])
 			plt.imshow(input_batch[n])
 		plt.tight_layout()
 

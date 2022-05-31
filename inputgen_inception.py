@@ -5,7 +5,6 @@
 import time
 import pathlib
 import os
-import pandas as pd 
 import random
 
 # import third party libraries
@@ -75,90 +74,160 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 print (f"Device: {device}")
 
 
-activation = {}
-def get_activation(name):
-    def hook(model, input, output):
-        activation[name] = output.detach()
-    return hook
-
-def generate_singleinput(model, input_tensors, output_tensors, index, count, random_input=True):
+def transfiguration_video(model, input_tensors, output_tensors, index, count, random_input=True):
 	"""
-	Generates an input for a given output
+	Generates an input for a given output class
 
 	Args:
 		input_tensor: torch.Tensor object, minibatch of inputs
 		output_tensor: torch.Tensor object, minibatch of outputs
 		index: int
+		count: int, timestep
+	kwargs:
+		random_input: bool, if True then uses a uniform random distribution as the start
+		video: bool, if True then saves a .png image for each iteration during generation
 
 	returns:
-		None (saves .png image)
+		None
 	"""
-	# manualSeed = 999
-	# random.seed(manualSeed)
-	# torch.manual_seed(manualSeed)
+	seed = 999
+	random.seed(seed)
+	torch.manual_seed(seed)
 
-	class_index = 292
-
+	class_index = 949
 	if random_input:
 		single_input = (torch.rand(1, 3, 256, 256))/25 + 0.5 # scaled normal distribution initialization
 
 	else:
 		single_input = input_tensors[0]
- 
-	single_input = single_input.to(device)
-	original_input = torch.clone(single_input).reshape(3, 256, 256).permute(1, 2, 0).cpu().detach().numpy()
+
+	og_input = torch.clone(single_input)
+
+	for k in range(500):
+		single_input = og_input.to(device)
+		single_input = single_input.reshape(1, 3, 256, 256)
+		original_input = torch.clone(single_input).reshape(3, 256, 256).permute(1, 2, 0).cpu().detach().numpy()
+		target_output = torch.tensor([class_index], dtype=int)
+
+		for i in range(100):
+			single_input = single_input.detach() # remove the gradient for the input (if present)
+			input_grad = layer_gradient(model, single_input, target_output, k) # compute input gradient
+			single_input = single_input - 0.15 * input_grad # gradient descent step
+			if i < 76:
+				single_input = torchvision.transforms.functional.gaussian_blur(single_input, 3)
+				if i % 5 == 0:
+					single_input = torchvision.transforms.Resize(256)(single_input)
+				elif i % 5 == 1:
+					single_input = torchvision.transforms.Resize(198)(single_input)
+				elif i % 5 == 2:
+					single_input = torchvision.transforms.Resize(160)(single_input)
+				elif i % 5 == 3:
+					single_input = torchvision.transforms.Resize(180)(single_input)
+				elif i % 5 == 4:
+					single_input = torchvision.transforms.Resize(200)(single_input)
+
+			single_input = torchvision.transforms.ColorJitter(0.001, 0.001, 0.001, 0.001)(single_input)
+
+		single_input = single_input.clone() / torch.max(single_input)
+		target_input = single_input.reshape(3, 256, 256).permute(1, 2, 0).cpu().detach().numpy()
+		plt.figure(figsize=(18, 10))
+		plt.subplot(1, 2, 1)
+		plt.axis('off')
+		plt.imshow(original_input, alpha=1)
+		plt.tight_layout()
+
+		plt.subplot(1, 2, 2)
+		plt.axis('off')
+		plt.imshow(target_input, alpha=1)
+		plt.tight_layout()
+		spercent, cpercent = (300-k)/300, k/300
+		plt.title(f'{int(spercent*100)}% Strawberry, {int(cpercent*100)}% Castle')
+		plt.savefig('adversarial_example{0:04d}.png'.format(k), dpi=410)
+		plt.close()
+
+	return target_input
+
+def generate_singleinput(model, input_tensors, output_tensors, index, count, random_input=True, video=False):
+	"""
+	Generates an input for a given output class
+
+	Args:
+		input_tensor: torch.Tensor object, minibatch of inputs
+		output_tensor: torch.Tensor object, minibatch of outputs
+		index: int
+		count: int, timestep
+	kwargs:
+		random_input: bool, if True then uses a uniform random distribution as the start
+		video: bool, if True then saves a .png image for each iteration during generation
+
+	returns:
+		None
+	"""
+
+	seed = 999
+	random.seed(seed)
+	torch.manual_seed(seed)
+
+	class_index = 483
+	if random_input:
+		single_input = (torch.rand(1, 3, 256, 256))/25 + 0.5 # scaled normal distribution initialization
+
+	else:
+		single_input = input_tensors[0]
+
+	og_input = torch.clone(single_input)
+
+	single_input = og_input.to(device)
 	single_input = single_input.reshape(1, 3, 256, 256)
 	original_input = torch.clone(single_input).reshape(3, 256, 256).permute(1, 2, 0).cpu().detach().numpy()
 	target_output = torch.tensor([class_index], dtype=int)
 
 	for i in range(100):
+		print (i)
+		k = 0
 		single_input = single_input.detach() # remove the gradient for the input (if present)
-		predicted_output = model(single_input)
-		# print (predicted_output.argmax())
-		input_grad = layer_gradient(model, single_input, target_output) # compute input gradient
-		# input_grad /= (torch.std(input_grad) + 1e-8)
-		# input_grad = torch.clip(input_grad,-1, 1)
+		input_grad = layer_gradient(model, single_input, target_output, k, video=True) # compute input gradient
 		
 		single_input = single_input - 0.15 * input_grad # gradient descent step
-		# single_input = single_input - (0.1/(i+1)) * input_grad # gradient descent step
-		# single_input = convolution(single_input)
 		if i < 76:
 			single_input = torchvision.transforms.functional.gaussian_blur(single_input, 3)
 			if i % 5 == 0:
-				single_input = torch.nn.functional.interpolate(single_input, 256)
+				single_input = torchvision.transforms.Resize(256)(single_input)
 			elif i % 5 == 1:
-				single_input = torch.nn.functional.interpolate(single_input, 128)
+				single_input = torchvision.transforms.Resize(128)(single_input)
 			elif i % 5 == 2:
-				single_input = torch.nn.functional.interpolate(single_input, 160)
+				single_input = torchvision.transforms.Resize(160)(single_input)
 			elif i % 5 == 3:
-				single_input = torch.nn.functional.interpolate(single_input, 100)
+				single_input = torchvision.transforms.Resize(180)(single_input)
 			elif i % 5 == 4:
-				single_input = torch.nn.functional.interpolate(single_input, 200)
+				single_input = torchvision.transforms.Resize(200)(single_input)
+			single_input = torchvision.transforms.Resize(256)(single_input)
 
-		single_input = torchvision.transforms.ColorJitter(0.0001)(single_input)
-		# if i % 10 < 5:
-		# 	single_input = torchvision.transforms.functional.rotate(single_input, 36)
-		# else:
-		# 	single_input = torchvision.transforms.functional.rotate(single_input, -36)
-		# single_input = torchvision.transforms.RandomAffine(0.0001, [0.0001, 0.0001])(single_input)
+		single_input = torchvision.transforms.ColorJitter(0.01, 0.01, 0.01, 0.01)(single_input)
 
+		if video:
+			predicted_output = predicted_output.reshape(1000).cpu().detach().numpy()
+			color_arr = ['blue' for i in range(len(predicted_output))]
+			color_arr[class_index] = 'red'
+			color_arr[738] = 'green'
 
-	single_input = single_input.clone() / torch.max(single_input)
-	target_input = single_input.reshape(3, 256, 256).permute(1, 2, 0).cpu().detach().numpy()
-	plt.figure(figsize=(15, 10))
-	plt.subplot(1, 2, 1)
-	plt.axis('off')
-	plt.imshow(original_input, alpha=1)
-	plt.tight_layout()
+			single_input = single_input.clone() / torch.max(single_input)
+			target_input = single_input.reshape(3, 256, 256).permute(1, 2, 0).cpu().detach().numpy()
+			plt.figure(figsize=(16, 8))
+			plt.subplot(1, 2, 1)
+			plt.title('Generated Image')
+			plt.imshow(target_input, alpha=1)
+			plt.axis('off')
+			plt.tight_layout()
 
-	plt.subplot(1, 2, 2)
-	plt.axis('off')
-	plt.imshow(target_input, alpha=1)
-	plt.tight_layout()
-	plt.show()
-
-	# plt.savefig('adversarial_example{0:04d}.png'.format(count), dpi=410)
-	plt.close()
+			plt.subplot(1, 2, 2)
+			plt.title('Predicted Output')
+			plt.scatter([i for i in range(1000)], predicted_output, color=color_arr)
+			plt.ylim([-10, 80])
+			plt.xlabel('ImageNet Category')
+			plt.tight_layout()
+			plt.savefig('adversarial_example{0:04d}.png'.format(i), dpi=410)
+			plt.close()
 
 	return target_input
 
@@ -178,7 +247,7 @@ def generate_inputbatch(model, input_tensors, output_tensors, index, count, mini
 	random.seed(seed)
 	torch.manual_seed(seed)
 
-	class_index = 483
+	class_index = 250
 	
 	for i in range(100):
 		if random_input:
@@ -195,11 +264,10 @@ def generate_inputbatch(model, input_tensors, output_tensors, index, count, mini
 			target_tensor[j][class_index] = 100 - i
 			target_tensor[j][class_index + 1] = i
 
-		for k in range(10):
-			print (k)
+		for k in range(100):
 			input_tensor = input_tensor.detach() # remove the gradient for the input (if present)
 			input_grad = target_tensor_gradient(model, input_tensor, target_tensor, minibatch_size) # compute input gradient
-			input_tensor = input_tensor - 0.15 * input_grad # gradient descent step
+			input_tensor = input_tensor - 0.0015 * input_grad # gradient descent step
 			if k < 76:
 				input_tensor = torchvision.transforms.functional.gaussian_blur(input_tensor, 3)
 				if k % 5 == 0:
@@ -269,7 +337,7 @@ def target_tensor_gradient(model, input_tensor, desired_output, minibatch_size):
 	return gradient
 
 
-def layer_gradient(model, input_tensor, desired_output):
+def layer_gradient(model, input_tensor, desired_output, k, video=False):
 	"""
 	Compute the gradient of the output (logits) with respect to the input 
 	using an L1-normalized L1 metric to maximize the target classification.
@@ -285,25 +353,46 @@ def layer_gradient(model, input_tensor, desired_output):
 	"""
 	input_tensor.requires_grad = True
 	output = model(input_tensor)
-	# maximize output val and minimize L1 norm of the input
-	loss = torch.abs(200 - output[0][int(true_output)]) + 0.001 * torch.abs(input_tensor).sum() 
+
+	if video:
+		loss = torch.abs(100 - output[0][int(desired_output)]) * (300-k)/300 + \
+			   torch.abs(100 - output[0][int(desired_output) - 466]) * (k/300) + 0.001 * torch.abs(input_tensor).sum() 
+	else:
+		loss = torch.abs(100 - output[0][int(desired_output)]) + 0.001 * torch.abs(input_tensor).sum() 
+
 	loss.backward()
 	gradient = input_tensor.grad
-
 	return gradient
 
 
-def adversarial_test(dataloader, model, count=0):
+def assemble_inputs(dataloader, model, count=0):
+	"""
+	Generate inputs 
+
+	Args:
+		dataloader: torch.utils.data.Dataloader() object
+		model: torch.nn.module object, model of interest
+	kwargs:
+		count: int, timestep
+
+	Returns:
+		None (saves .png image)
+	"""
+
 	model.eval()
 	ls = []
+	# get a minibatch of training examples
 	for x, y in train_dataloader:
 		break
+
 	for i in range(16):
-		ls.append(generate_inputbatch(model, x, [], i, count, minibatch_size, random_input=False))
+		ls.append(generate_singleinput(model, x, [], i, count, random_input=False))
+
+	# show generated batch
 	show_batch(ls, grayscale=False)
+	# show original batch
 	x = x.reshape(16, 3, 256, 256).permute(0, 2, 3, 1).cpu().detach().numpy()
 	show_batch(x, grayscale=False)
-	model.train()
 	return
 
 
@@ -336,19 +425,15 @@ def show_batch(input_batch, count=0, grayscale=False):
 
 	plt.tight_layout()
 	plt.savefig('transformed_flowers{0:04d}.png'.format(count), dpi=410)
-	# plt.show()
 	plt.close()
 	return
 
+if __name__ == '__main__':
+	loss_fn = nn.CrossEntropyLoss()
+	model = torch.hub.load('pytorch/vision:v0.10.0', 'inception_v3', pretrained=True).to(device)
 
-loss_fn = nn.CrossEntropyLoss()
-model = torch.hub.load('pytorch/vision:v0.10.0', 'inception_v3', pretrained=True).to(device)
-
-model.eval()
-adversarial_test(None, model, 0)
-
-
-
+	model.eval()
+	transfiguration_video()
 
 
 

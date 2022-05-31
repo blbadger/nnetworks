@@ -18,10 +18,6 @@ from torch.utils.data import DataLoader, Dataset
 import torchvision
 import matplotlib.pyplot as plt  
 
-print (torch.cuda.is_available())
-print (torch.cuda.device_count())
-print (torch.cuda.current_device())
-
 # dataset directory specification
 data_dir = pathlib.Path('../Neural_networks/flower_1',  fname='Combined')
 data_dir2 = pathlib.Path('../Neural_networks/flower_2', fname='Combined')
@@ -179,10 +175,9 @@ class MediumNetwork(nn.Module):
 		return final_output
 
 
-
 def gradientxinput(model, input_tensor, output_dim, max_normalized=False):
 	"""
-	 Compute a gradientxinput attribution score
+	 Compute a gradientxinput attribution score on the output
 
 	 Args:
 		input: torch.Tensor() object of input
@@ -213,7 +208,7 @@ def gradientxinput(model, input_tensor, output_dim, max_normalized=False):
 
 def loss_gradientxinput(model, input_tensor, true_output, output_dim, max_normalized=False):
 	"""
-	 Compute a gradientxinput attribution scor
+	 Compute a gradientxinput attribution score
 
 	 Args:
 		input: torch.Tensor() object of input
@@ -245,6 +240,20 @@ def loss_gradientxinput(model, input_tensor, true_output, output_dim, max_normal
 	return gradientxinput
 
 def train(dataloader, model, loss_fn, optimizer, epochs):
+	"""
+	Train the model on the appropriate dataset
+
+	Args:
+		dataloader: torch.utils.data.DataLoader() object, iterable for loading data
+		model: torch.nn.Module object, model of interest
+		loss_fn: arbitrary function to calculate output loss 
+		optimizer: torch.optim() object to update parameters during gradient descent
+		epochs: int, number of epochs desired
+
+	Returns:
+		None (modifies model in-place)
+	"""
+
 	model.train()
 	count = 0
 	total_loss = 0
@@ -280,9 +289,15 @@ def show_batch(input_batch, output_batch, gradxinput_batch, individuals=False, c
 	Show a batch of images with gradientxinputs superimposed
 
 	Args:
-		output_batch: arr[torch.Tensor] of input images
+		input_batch: arr[torch.Tensor] of input images
+		output_batch: arr[torch.Tensor] of output labels
+		gradxinput_batch: arr[torch.Tensor] of saliency metrics
 
+	kwargs:
+		individuals: bool, if True then plot each input element individually
+		count: int, timestep
 	"""
+
 	if individuals:
 		for n in range(len(input_batch)):
 			ax = plt.subplot(1, 3, 1)
@@ -318,6 +333,18 @@ def show_batch(input_batch, output_batch, gradxinput_batch, individuals=False, c
 
 
 def test(dataloader, model, count=0):
+	"""
+	Evaluate the model on test data
+
+	Args:
+		dataloader: torch.utils.data.DataLoader() object, iterable for loading data
+		model: torch.nn.Module object, model of interest
+	kwargs:
+		count: int, timestep number
+
+	Returns:
+		None
+	"""
 	size = len(dataloader.dataset)	
 	model.eval()
 	test_loss, correct = 0, 0
@@ -340,50 +367,16 @@ def test(dataloader, model, count=0):
 	show_batch(inputs, y, gradxinputs, count=count)
 	accuracy = correct / size
 	print (f"Test accuracy: {int(correct)} / {size}")
-	model.train()
 	return
 
 
-epochs = 50
-model = MediumNetwork() 
-loss_fn = nn.CrossEntropyLoss() 
-optimizer = torch.optim.Adam(model.parameters())
-train(train_dataloader, model, loss_fn, optimizer, epochs)
+if __name__ == '__main__':
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+	epochs = 50
+	model = MediumNetwork() 
+	loss_fn = nn.CrossEntropyLoss() 
+	optimizer = torch.optim.Adam(model.parameters())
+	train(train_dataloader, model, loss_fn, optimizer, epochs)
 
 
 

@@ -134,7 +134,7 @@ class StableGenerator(nn.Module):
 		self.conv2 = nn.ConvTranspose2d(512, 256, 4, stride=2, padding=1)
 		self.conv3 = nn.ConvTranspose2d(256, 128, 4, stride=2, padding=1)
 		self.conv4 = nn.ConvTranspose2d(128, 64, 4, stride=2, padding=1)
-	# switch second index to 3 for color images
+		# switch second index to 3 for color images
 		self.conv5 = nn.ConvTranspose2d(64, 3, 4, stride=2, padding=1) # end with shape minibatch_sizex3x128x128
 
 		self.relu = nn.ReLU()
@@ -232,6 +232,21 @@ def show_batch(input_batch, count=0, grayscale=False):
 
 
 def train_dcgan_adversaries(dataloader, discriminator, discriminator_optimizer, generator, generator_optimizer, loss_fn, epochs):
+	"""
+	Trains the generative adversarial network model.
+
+	Args:
+		dataloader: torch.utils.data.Dataloader object, iterable for loading training and test data
+		discriminator: torch.nn.Module() object
+		discriminator_optimizer: torch.optim object, optimizes discriminator params during gradient descent
+		generator: torch.nn.Module() object
+		generator_optimizer: torc.optim object, optimizes generator params during gradient descent
+		loss_fn: arbitrary method to apply to models (default binary cross-entropy loss)
+		epochs: int, number of training epochs desired
+
+	Returns:
+		None (modifies generator and discriminator in-place)
+	"""
 	discriminator.train()
 	generator.train()
 	count = 0
@@ -297,81 +312,49 @@ def train_dcgan_adversaries(dataloader, discriminator, discriminator_optimizer, 
 		start = time.time()
 	return
 
-def test(dataloader, model, count=0, short=True):
-	size = len(dataloader.dataset)	
-	model.eval()
-	test_loss, correct = 0, 0
-	with torch.no_grad():
-		for x, y in dataloader:
-			x, y = x.to(device), y.to(device)
-			pred = model(x)
-			correct += (pred.argmax(1) == y).type(torch.float).sum().item()
-			if short:
-				break
+def explore_latentspace(generator):
+	"""
+	Plot a 10x10 grid of outputs from the latent space (assumes a 100x100 grid)
 
-	inputs, gradxinputs = [], []
-	for i in range(len(x[:6])):
-		single_input= x[i].reshape(1, 3, 256, 256)
-		gxi = loss_gradient(model, single_input, y[i], 5)
-		# gxi = torch.sum(gxi, 1)
-		input_img = single_input.reshape(3, 256, 256).permute(1, 2, 0).detach().numpy()
-		gxi_img = gxi / torch.max(gxi) * 10
-		gxi_img = gxi_img.reshape(3, 256, 256).permute(1, 2, 0).detach().numpy()
-		inputs.append(input_img)
-		gradxinputs.append(gxi_img)
+	Args:
+		generator: torch.nn.Module() object of the generator
 
-	show_batch(inputs, y, gradxinputs, count=count)
-	accuracy = correct / size
-	print (f"Test accuracy: {int(correct)} / {size}")
-	model.train()
+	Returns:
+		None (saves png image in call to show_batch())
+	"""
+	fixed_input = torch.randn(1, 100)
+	final_input = fixed_input.clone()
+	for i in range(10):
+		for j in range(10):
+			new_input = fixed_input.clone()
+			new_input[0][1:20] += 0.25 * (i+1)
+			new_input[0][20:40] -= 0.25* (j+1)
+			new_input[0][40:60] += 0.25 * (i+1)
+			new_input[0][60:80] -= 0.25 * (j+1)
+			new_input[0][80:100] += 0.25 * (j+1)
+			final_input = torch.cat([final_input, new_input])
+
+	images = generator(final_input[1:101]).reshape(len(fixed_input[0]), 28, 28).detach().numpy()
+	show_batch(images, 0, grayscale=True)
 	return
 
-# def weights_init(m):
-#     classname = m.__class__.__name__
-#     if classname.find('Conv') != -1:
-#         nn.init.normal_(m.weight.data, 0.0, 0.02)
-#     elif classname.find('BatchNorm') != -1:
-#         nn.init.normal_(m.weight.data, 1.0, 0.02)
-#         nn.init.constant_(m.bias.data, 0)
+if __name__ == '__main__':
 
-epochs = 3000
-discriminator = StableDiscriminator().to(device)
-generator = StableGenerator(minibatch_size).to(device)
-# discriminator.apply(weights_init)
-# generator.apply(weights_init)
-loss_fn = nn.BCELoss()
-discriminator_optimizer = torch.optim.Adam(discriminator.parameters(), lr=2e-4, betas=(0.5, 0.999))
-generator_optimizer = torch.optim.Adam(generator.parameters(), lr=2e-4, betas=(0.5, 0.999))
-# train(train_dataloader, trained_model, loss_fn, generator_optimizer, epochs)
-# discriminator.load_state_dict(torch.load('trained_models/discriminator.pth'))
-# generator.load_state_dict(torch.load('trained_models/generator.pth'))
+	epochs = 3000
+	discriminator = StableDiscriminator().to(device)
+	generator = StableGenerator(minibatch_size).to(device)
+	loss_fn = nn.BCELoss()
+	discriminator_optimizer = torch.optim.Adam(discriminator.parameters(), lr=2e-4, betas=(0.5, 0.999))
+	generator_optimizer = torch.optim.Adam(generator.parameters(), lr=2e-4, betas=(0.5, 0.999))
 
-train_dcgan_adversaries(train_dataloader, discriminator, discriminator_optimizer, generator, generator_optimizer, loss_fn, epochs)
-torch.save(discriminator.state_dict(), 'flower_discriminator.pth')
-torch.save(generator.state_dict(), 'flower_generator.pth')
+	train_dcgan_adversaries(train_dataloader, discriminator, discriminator_optimizer, generator, generator_optimizer, loss_fn, epochs)
+	torch.save(discriminator.state_dict(), 'flower_discriminator.pth')
+	torch.save(generator.state_dict(), 'flower_generator.pth')
 
-files.download('flower_discriminator.pth')
-files.download('flower_generator.pth')
+	files.download('flower_discriminator.pth')
+	files.download('flower_generator.pth')
 
-# generator.load_state_dict(torch.load('trained_models/fmnist_fcgenerator.pth'))
-# discriminator.load_state_dict(torch.load('trained_models/fmnist_fcdiscriminator.pth'))
+	generator.load_state_dict(torch.load('trained_models/fmnist_fcgenerator.pth'))
+	discriminator.load_state_dict(torch.load('trained_models/fmnist_fcdiscriminator.pth'))
 
-fixed_input = torch.randn(1, 100, 1, 1)
-
-final_input = fixed_input.clone()
-for i in range(10):
-	for j in range(10):
-		new_input = fixed_input.clone()
-		new_input[0][1:20] += 0.25 * (i+1)
-		new_input[0][20:40] -= 0.25* (j+1)
-		new_input[0][40:60] += 0.25 * (i+1)
-		new_input[0][60:80] -= 0.25 * (j+1)
-		new_input[0][80:100] += 0.25 * (j+1)
-		final_input = torch.cat([final_input, new_input])
-
-fixed_input = torch.randn(128, 100, 1, 1).to(device)
-# images = generator(final_input[1:101])
-images = generator(fixed_input)
-print (images.shape)
-images = images.reshape(128, 3, 128, 128).permute(0, 2, 3, 1).cpu().detach().numpy()
-show_batch(images, 0, grayscale=True)
+	explore_latentspace(generator)

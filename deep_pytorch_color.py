@@ -1,6 +1,6 @@
 # deep_pytorch.py
-# A deep convolutional net for image classification
-# implemented with a functional pytorch model
+# A deep convolutional net for image classification, input attribution, and image generation.
+# Optimized for low-dimensional outputs.
 
 # import standard libraries
 import time
@@ -17,7 +17,6 @@ from torch.nn import Conv2d
 from torch.utils.data import DataLoader, Dataset
 import torchvision
 import matplotlib.pyplot as plt  
-
 
 # dataset directory specification
 data_dir = pathlib.Path('../Neural_networks/flower_1',  fname='Combined')
@@ -69,6 +68,7 @@ class ImageDataset(Dataset):
 			label = self.target_transform(label)
 
 		return image, label_tens
+
 
 # specify batch size
 batch_size = 16
@@ -134,11 +134,11 @@ class DeepNetwork(nn.Module):
 		final_output = self.softmax(final_output)
 		return final_output
 
-class MediumNetworkFull(nn.Module):
+class MediumNetwork(nn.Module):
 
 	def __init__(self):
 
-		super(MediumNetworkFull, self).__init__()
+		super(MediumNetwork, self).__init__()
 		self.entry_conv = Conv2d(3, 16, 3, padding=(1, 1))
 		self.conv16 = Conv2d(16, 16, 3, padding=(1, 1))
 		self.conv32 = Conv2d(16, 32, 3, padding=(1, 1))
@@ -174,93 +174,6 @@ class MediumNetworkFull(nn.Module):
 		final_output = self.d3(output)
 		final_output = self.sigmoid(final_output)
 		return final_output
-
-class MediumNetwork(nn.Module):
-
-	def __init__(self):
-
-		super(MediumNetwork, self).__init__()
-		self.entry_conv = Conv2d(3, 16, 3, padding=(1, 1))
-		self.conv16 = Conv2d(16, 16, 3, padding=(1, 1))
-		self.conv32 = Conv2d(16, 32, 3, padding=(1, 1))
-		self.conv32_2 = Conv2d(32, 32, 3, padding=(1, 1))
-		self.conv64 = Conv2d(32, 64, 3, padding=(1, 1))
-		self.conv64_2 = Conv2d(64, 64, 3, padding=(1, 1))
-
-		self.max_pooling = nn.MaxPool2d(2, return_indices=True)
-		self.flatten = nn.Flatten()
-		self.relu = nn.ReLU()
-		self.softmax = nn.Softmax(dim=1)
-		self.d1 = nn.Linear(8192, 512)
-		self.d2 = nn.Linear(512, 50)
-		self.d3 = nn.Linear(50, 2)
-		self.index1, self.index2, self.index3, self.index4 = [], [], [], []
-		self.batchnorm1 = nn.BatchNorm1d(512)
-		self.batchnorm2 = nn.BatchNorm1d(50)
-		
-
-	def forward(self, model_input):
-		out = self.relu(self.entry_conv(model_input))
-		out, self.index1 = self.max_pooling(out)
-		out = self.relu(self.conv16(out))
-		out, self.index2 = self.max_pooling(out)
-		out = self.relu(self.conv16(out))
-		out, self.index3 = self.max_pooling(out)
-		out = self.relu(self.conv32(out))
-		out, self.index4 = self.max_pooling(out)
-		output = torch.flatten(out, 1, 3)
-
-		output = self.d1(output)
-		output = self.relu(output)
-		output = self.d2(output)
-		output = self.relu(output)
-		final_output = self.d3(output)
-		final_output = self.softmax(final_output)
-		return final_output
-
-
-class InvertedMediumNet(nn.Module):
-
-	def __init__(self):
-
-		super(InvertedMediumNet, self).__init__()
-		self.entry_conv = Conv2d(16, 3, 3, padding=(1, 1))
-		self.conv16 = Conv2d(16, 16, 3, padding=(1, 1))
-		self.conv32 = Conv2d(32, 16, 3, padding=(1, 1))
-		self.conv32_2 = Conv2d(32, 32, 3, padding=(1, 1))
-		self.conv64 = Conv2d(64, 32, 3, padding=(1, 1))
-		self.conv64_2 = Conv2d(64, 64, 3, padding=(1, 1))
-
-		self.max_pooling = nn.MaxUnpool2d(2)
-		self.flatten = nn.Flatten()
-		self.relu = nn.ReLU()
-		self.softmax = nn.Softmax(dim=1)
-		self.d1 = nn.Linear(512, 8192)
-		self.d2 = nn.Linear(50, 512)
-		self.d3 = nn.Linear(5, 50)
-		self.batchnorm1 = nn.BatchNorm1d(512)
-		self.batchnorm2 = nn.BatchNorm1d(50)
-		
-
-	def forward(self, final_output):
-		# final_output = self.softmax(final_output)
-		output = self.d3(final_output)
-		output = self.relu(output)
-		output = self.d2(output)
-		output = self.relu(output)
-		output = self.d1(output)
-
-		out = torch.reshape(output, (16, 32, 16, 16)) # reshape for convolutions
-		out = self.max_pooling(out, discriminator.index4)
-	
-		out = self.relu(self.conv32(out))
-		out = self.max_pooling(out, discriminator.index3)
-		out = self.relu(self.conv16(out))
-		out = self.max_pooling(out, discriminator.index2)
-		out = self.relu(self.conv16(out))
-		out = self.max_pooling(out, discriminator.index1)
-		out = self.relu(self.entry_conv(out))
-		return out
 
 
 def gradientxinput(model, input_tensor, output_dim, max_normalized=False):
@@ -380,101 +293,6 @@ def loss_gradientxinput(model, input_tensor, true_output, output_dim, max_normal
 
 	return gradientxinput
 
-def train(dataloader, model, loss_fn, optimizer, epochs):
-	model.train()
-	count = 0
-	total_loss = 0
-	start = time.time()
-
-	for e in range(epochs):
-		print (f"Epoch {e+1} \n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
-		print ('\n')
-		for batch, (x, y) in enumerate(dataloader):
-			print (x.shape)
-			# test(test_dataloader, model, count)
-			# adversarial_test(test_dataloader, model, count)
-			count += 1
-			x, y = x.to(device), y.to(device)
-			pred = model(x)
-			loss = loss_fn(pred, y)
-			total_loss += loss
-
-			# zero out gradients to prevent addition between minibatches
-			optimizer.zero_grad()
-			loss.backward()
-			optimizer.step()
-
-
-		ave_loss = float(total_loss) / count
-		elapsed_time = time.time() - start
-		print (f"Average Loss: {ave_loss:.04}")
-		print (f"Completed in {int(elapsed_time)} seconds")
-		start = time.time()
-	return
-
-
-def train_generative_adversaries(dataloader, discriminator, discriminator_optimizer, generator, generator_optimizer, loss_fn, epochs):
-	discriminator.train()
-	generator.train()
-	count = 0
-	total_loss = 0
-	start = time.time()
-
-	for e in range(epochs):
-		print (f"Epoch {e+1} \n~~~~~~~~~~~~~~~~~~~~~~~")
-		print ('\n')
-		for batch, (x, y) in enumerate(dataloader):
-			count += 1
-
-			discriminator_optimizer.zero_grad()
-			_ = discriminator(x) # initialize the index arrays
-
-			random_output = torch.randn(16, 5)
-			generated_samples = generator(random_output)
-			# input_dataset = torch.cat([x, generated_samples]) # or torch.cat([x, torch.rand(x.shape)])
-			# output_labels = torch.cat([torch.ones(len(y), dtype=int), torch.zeros(len(generated_samples), dtype=int)])
-			discriminator_prediction = discriminator(generated_samples)
-			output_labels = torch.zeros(len(y), dtype=int) # generated examples have label 0
-			discriminator_loss = loss_fn(discriminator_prediction, output_labels)
-			discriminator_loss.backward()
-
-			discriminator_prediction = discriminator(x)
-			output_labels = torch.ones(len(y), dtype=int) # true examples have label 1
-			discriminator_loss = loss_fn(discriminator_prediction, output_labels)
-			discriminator_loss.backward()
-			discriminator_optimizer.step()
-			print (f'Discriminator loss: {discriminator_loss}')
-			print (discriminator.d2.bias.norm())
-
-			_ = discriminator(x) # reset index dims to 16-element minibatch size
-				
-			generated_outputs = generator(random_output)
-			discriminator_outputs = discriminator(generated_outputs)
-			generator_loss = loss_fn(discriminator_outputs, torch.ones(len(y), dtype=int)) # pretend that all generated inputs are in the dataset
-
-			generator_optimizer.zero_grad()
-			generator_loss.backward()
-			generator_optimizer.step()
-
-			print (generator.d2.bias.norm())
-			print (discriminator_prediction)
-			print (generator_loss)
-			plt.axis('off')
-			output = generator(random_output)
-			plt.imshow((generated_outputs[0] / torch.max(generated_outputs[0])).reshape(3, 256, 256).permute(1, 2, 0).detach().numpy())
-			plt.tight_layout()
-			plt.savefig('gan{0:04d}'.format(count), dpi=410)
-			plt.close()
-
-		torch.save(generator.state_dict(), 'trained_models/generator_large.pth')
-		torch.save(discriminator.state_dict(), 'trained_models/discriminator_large.pth')
-		ave_loss = float(total_loss) / count
-		elapsed_time = time.time() - start
-		print (f"Average Loss: {ave_loss:.04}")
-		print (f"Completed in {int(elapsed_time)} seconds")
-		start = time.time()
-
-	return
 
 def show_batch(input_batch, output_batch, gradxinput_batch, individuals=False, count=0):
 	"""
@@ -502,6 +320,7 @@ def show_batch(input_batch, output_batch, gradxinput_batch, individuals=False, c
 			plt.axis('off')
 			plt.title('Gradient * Input')
 			plt.imshow(gradxinput_batch[n], cmap='inferno', alpha=1)
+
 			ax = plt.subplot(1, 3, 3)
 			plt.axis('off')
 			plt.title('Combined')
@@ -520,7 +339,6 @@ def show_batch(input_batch, output_batch, gradxinput_batch, individuals=False, c
 		# plt.imshow(gradxinput_batch[n], cmap='inferno', alpha=1)
 
 	plt.tight_layout()
-	# plt.show()
 	plt.savefig('flower_attributions{0:04d}.png'.format(count), dpi=410)
 	plt.close()
 	return
@@ -532,7 +350,8 @@ def plot_adversaries(model, input_tensors, output_tensors, index, count):
 	Args:
 		input_tensor: torch.Tensor object, minibatch of inputs
 		output_tensor: torch.Tensor object, minibatch of outputs
-		index: int
+		index: int, example number
+		count: int, timestep number
 
 	returns:
 		None (saves .png image)
@@ -569,6 +388,7 @@ def plot_adversaries(model, input_tensors, output_tensors, index, count):
 	plt.axis('off')
 	plt.title('Random Addition')
 	plt.imshow(gradient, alpha=1)
+
 	ax = plt.subplot(1, 3, 3)
 	plt.axis('off')
 	plt.title('{}% {}'.format(adversarial_confidence, adversarial_class))
@@ -586,7 +406,8 @@ def generate_adversaries(model, input_tensors, output_tensors, index, count):
 	Args:
 		input_tensor: torch.Tensor object, minibatch of inputs
 		output_tensor: torch.Tensor object, minibatch of outputs
-		index: int
+		index: int, example number
+		count: timestep number
 
 	returns:
 		None (saves .png image)
@@ -623,7 +444,8 @@ def hidden_input_gen(model, input_tensors, output_tensors, index, count):
 	Args:
 		input_tensor: torch.Tensor object, minibatch of inputs
 		output_tensor: torch.Tensor object, minibatch of outputs
-		index: int
+		index: int, example number
+		count: int, timestep number
 
 	returns:
 		None (saves .png image)
@@ -659,7 +481,8 @@ def generate_input(model, input_tensors, output_tensors, index, count):
 	Args:
 		input_tensor: torch.Tensor object, minibatch of inputs
 		output_tensor: torch.Tensor object, minibatch of outputs
-		index: int
+		index: int, example number
+		count: int, timestep number
 
 	returns:
 		None (saves .png image)
@@ -697,7 +520,61 @@ def generate_input(model, input_tensors, output_tensors, index, count):
 
 	return
 
+def train(dataloader, model, loss_fn, optimizer, epochs):
+	"""
+	Train the model on a dataset from the dataloader object
+
+	Args:
+		dataloader: torch.utis.Dataloader() object, iterable for loading transformed data
+		model: torch.nn.module() object, deep learning model of interest
+		loss_fn: arbitrary fn, loss function for application to model outputs
+		optimizer: torch.nn object for performing gradient descent parameter updates
+		epochs: int, number of training epochs desired
+
+	Returns:
+		None (updates model in-place)
+	"""
+
+	model.train()
+	count = 0
+	total_loss = 0
+	start = time.time()
+
+	for e in range(epochs):
+		print (f"Epoch {e+1} \n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+		print ('\n')
+		for batch, (x, y) in enumerate(dataloader):
+			count += 1
+			x, y = x.to(device), y.to(device)
+			pred = model(x)
+			loss = loss_fn(pred, y)
+			total_loss += loss
+
+			# zero out gradients to prevent addition between minibatches
+			optimizer.zero_grad()
+			loss.backward()
+			optimizer.step()
+
+		ave_loss = float(total_loss) / count
+		elapsed_time = time.time() - start
+		print (f"Average Loss: {ave_loss:.04}")
+		print (f"Completed in {int(elapsed_time)} seconds")
+		start = time.time()
+	return
+
 def adversarial_test(dataloader, model, count=0):
+	"""
+	Train the model on a dataset from the dataloader object
+
+	Args:
+		dataloader: torch.utis.Dataloader() object, iterable for loading transformed data
+		model: torch.nn.module() object, deep learning model of interest
+	kwargs:
+		count: int, timestep number
+
+	Returns:
+		None (updates model in-place)
+	"""
 	size = len(dataloader.dataset)	
 	model.eval()
 	test_loss, correct = 0, 0
@@ -708,12 +585,25 @@ def adversarial_test(dataloader, model, count=0):
 
 	inputs, gradxinputs = [], []
 	for i in range(10):
-		# generate_input(model, x, y, i, count=i)
+		generate_input(model, x, y, i, count=i)
 		plot_adversaries(model, x, y, i, count=i)
 	model.train()
 	return
 
 def test(dataloader, model, count=0, short=True):
+	"""
+	Train the model on a dataset from the dataloader object
+
+	Args:
+		dataloader: torch.utis.Dataloader() object, iterable for loading transformed data
+		model: torch.nn.module() object, deep learning model of interest
+	kwargs:
+		count: int, timestep number
+		short: bool, if true then only one minibatch is tested
+
+	Returns:
+		None (updates model in-place)
+	"""
 	size = len(dataloader.dataset)	
 	model.eval()
 	test_loss, correct = 0, 0
@@ -743,63 +633,18 @@ def test(dataloader, model, count=0, short=True):
 	return
 
 
-epochs = 40
-# generator = InvertedMediumNet()
-# discriminator = MediumNetwork()
-model = MediumNetworkFull()
-loss_fn = nn.CrossEntropyLoss() 
-# d_optimizer = torch.optim.Adam(discriminator.parameters(), lr=0.0001)
-# g_optimizer = torch.optim.Adam(generator.parameters(), lr=0.0001)
-# train(train_dataloader, model, loss_fn, optimizer, epochs)
-# torch.save(model.state_dict(), 'trained_models/flowernet.pth')
+if __name__ == '__main__':
+	training = False
+	epochs = 40
+	model = MediumNetwork()
+	loss_fn = nn.CrossEntropyLoss() 
+	if training:
+		train(train_dataloader, model, loss_fn, optimizer, epochs)
+		torch.save(model.state_dict(), 'trained_models/flowernet.pth')
 
-model.load_state_dict(torch.load('trained_models/flowernet.pth'))
-# test(test_dataloader, model)
-adversarial_test(test_dataloader, model, 0)
-# train_generative_adversaries(train_dataloader, discriminator, d_optimizer, generator, g_optimizer, loss_fn, epochs)
-
-
-generator.load_state_dict(torch.load('trained_models/generator_large.pth'))
-discriminator.load_state_dict(torch.load('trained_models/discriminator_large.pth'))
-
-
-with torch.no_grad():
-	for batch, (x, y) in enumerate(train_dataloader):
-		_ = discriminator(x)
-		x = x[0].reshape(3, 256, 256).permute(1, 2, 0).detach().numpy()
-		plt.imshow(x)
-		plt.show()
-		plt.close()
-		break
-	random_output = torch.randn(16, 5)
-	for i in range(1):
-		random_output[0][0] += 0.01
-		generated_outputs = generator(random_output)
-		plt.imshow((generated_outputs[0] / torch.max(generated_outputs[0])).reshape(3, 256, 256).permute(1, 2, 0).detach().numpy())
-		plt.tight_layout()
-		plt.savefig('shifted_gan{0:04d}'.format(i), dpi=410)
-		plt.close()
-
-
-
-	for batch, (x, y) in enumerate(train_dataloader):
-		_ = discriminator(x)
-		x = x[0].reshape(3, 256, 256).permute(1, 2, 0).detach().numpy()
-		plt.imshow(x)
-		plt.show()
-		plt.close()
-		break
-
-	random_output = torch.randn(16, 5)
-	for i in range(1, 2):
-		random_output[0][0] += 0.01
-		generated_outputs = generator(random_output)
-		plt.imshow((generated_outputs[0] / torch.max(generated_outputs[0])).reshape(3, 256, 256).permute(1, 2, 0).detach().numpy())
-		plt.tight_layout()
-		plt.savefig('shifted_gan{0:04d}'.format(i), dpi=410)
-		plt.close()
-
-
+	model.load_state_dict(torch.load('trained_models/flowernet.pth'))
+	test(test_dataloader, model)
+	adversarial_test(test_dataloader, model, 0)
 
 
 

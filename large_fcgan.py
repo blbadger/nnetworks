@@ -127,10 +127,13 @@ class InvertedFC(nn.Module):
 	def forward(self, input_tensor):
 		out = self.d1(input_tensor)
 		out = self.relu(out)
+
 		out = self.d2(out)
 		out = self.relu(out)
+
 		out = self.d3(out)
 		out = self.relu(out)
+
 		out = self.input_transform(out)
 		out = self.tanh(out)
 		return out
@@ -195,6 +198,21 @@ def show_batch(input_batch, count=0, grayscale=False):
 	return
 
 def train_generative_adversaries(dataloader, discriminator, discriminator_optimizer, generator, generator_optimizer, loss_fn, epochs):
+	"""
+	Trains the generative adversarial network model.
+
+	Args:
+		dataloader: torch.utils.data.Dataloader object, iterable for loading training and test data
+		discriminator: torch.nn.Module() object
+		discriminator_optimizer: torch.optim object, optimizes discriminator params during gradient descent
+		generator: torch.nn.Module() object
+		generator_optimizer: torc.optim object, optimizes generator params during gradient descent
+		loss_fn: arbitrary method to apply to models (default binary cross-entropy loss)
+		epochs: int, number of training epochs desired
+
+	Returns:
+		None (modifies generator and discriminator in-place)
+	"""
 	discriminator.train()
 	generator.train()
 	count = 0
@@ -215,7 +233,7 @@ def train_generative_adversaries(dataloader, discriminator, discriminator_optimi
 			count += 1
 			random_output = torch.randn(minibatch_size, 100).to(device)
 			generated_samples = generator(random_output)
-			input_dataset = torch.cat([x, generated_samples]) # or torch.cat([x, torch.rand(x.shape)])
+			input_dataset = torch.cat([x, generated_samples]) # concatenated sample approach
 			output_labels = torch.cat([torch.ones(len(y)), torch.zeros(len(generated_samples))]).to(device)
 			discriminator_prediction = discriminator(input_dataset).reshape(minibatch_size*2)
 			discriminator_loss = loss_fn(discriminator_prediction, output_labels)
@@ -247,107 +265,133 @@ def train_generative_adversaries(dataloader, discriminator, discriminator_optimi
 			torch.save(generator.state_dict(), 'flower_generator.pth')
 	return
 
-def input_gradient(model, input_tensor, output_dim):
+def input_gradient(model, input_tensor):
+	"""
+	Finds the gradient of the output's max val w.r.t the input.
+
+	Args:
+		model: torch.nn.Module() object
+		input_tensor: torch.tensor
+	Returns:
+		gradient: torch.tensor.grad object
+	"""
+
 	# change output to float
 	input_tensor.requires_grad = True
 	output = model.forward(input_tensor)
 
 	# only scalars may be assigned a gradient
-	output = torch.median(output)
+	output = torch.max(output)
 
 	# backpropegate output gradient to input
 	output.backward(retain_graph=True)
-	
-	return input_tensor.grad
+	gradient = input_tensor.grad
+	return input_tensor
 
 def count_parameters(model):
-		"""
-		Display the tunable parameters in the model of interest
+	"""
+	Display the tunable parameters in the model of interest
 
-		Args:
-			model: torch.nn object
+	Args:
+		model: torch.nn object
 
-		Returns:
-			total_params: the number of model parameters
+	Returns:
+		total_params: the number of model parameters
 
-		"""
+	"""
 
-		table = PrettyTable(['Modules', 'Parameters'])
-		total_params = 0
-		for name, parameter in model.named_parameters():
-			if not parameter.requires_grad:
-				continue
-			param = parameter.numel()
-			table.add_row([name, param])
-			total_params += param 
+	table = PrettyTable(['Modules', 'Parameters'])
+	total_params = 0
+	for name, parameter in model.named_parameters():
+		if not parameter.requires_grad:
+			continue
+		param = parameter.numel()
+		table.add_row([name, param])
+		total_params += param 
 
-		print (table)
-		print (f'Total trainable parameters: {total_params}')
-		return total_params
+	print (table)
+	print (f'Total trainable parameters: {total_params}')
+	return total_params
 
-epochs = 3000
-discriminator = FCnet().to(device)
-generator = InvertedFC().to(device)
-count_parameters(discriminator)
+def latent_space_2d():
+	"""
+	Two-dimensional exploration of latent space. Assumes 2-dimensional space
 
-loss_fn = nn.BCELoss()
-discriminator_optimizer = torch.optim.Adam(discriminator.parameters(), lr=0.0002)
-generator_optimizer = torch.optim.Adam(generator.parameters(), lr=0.0002)
-train_generative_adversaries(dataloader, discriminator, discriminator_optimizer, generator, generator_optimizer, loss_fn, epochs)
+	Args:
+		None
 
-torch.save(discriminator.state_dict(), 'discriminator.pth')
-torch.save(generator.state_dict(), 'generator.pth')
-# download checkpoint file
-files.download('discriminator.pth')
-files.download('generator.pth') 
+	Returns:
+		None
+	"""
 
-discriminator.load_state_dict(torch.load('discriminator.pth'))
-generator.load_state_dict(torch.load('generator.pth'))
-fixed_input = torch.tensor([[0.,  0.]]).to(device)
-print (fixed_input)
-original_input = fixed_input.clone()
+	fixed_input = torch.tensor([[0.,  0.]]).to(device)
+	original_input = fixed_input.clone()
 
-for i in range(16):
-  for j in range(16):
-    next_input = original_input.clone()
-    next_input[0][0] = 1 - (1/8) * (i) + original_input[0][0]
-    next_input[0][1] = -1 + (1/8) * (j) + original_input[0][1]
-    fixed_input = torch.cat([fixed_input, next_input])
+	for i in range(16):
+	  for j in range(16):
+	    next_input = original_input.clone()
+	    next_input[0][0] = 1 - (1/8) * (i) + original_input[0][0]
+	    next_input[0][1] = -1 + (1/8) * (j) + original_input[0][1]
+	    fixed_input = torch.cat([fixed_input, next_input])
 
-fixed_input = fixed_input[1:]
+	fixed_input = fixed_input[1:]
+	while len(fixed_input) < 128:
+	  fixed_input = torch.cat([fixed_input, next_input])
 
-# input = fixed_input[-1] # deep in the 1s
+	# fixed_input = torch.randn(128, 2)
+	fixed_input = fixed_input.to(device)
+	fixed_outputs = generator(fixed_input)
+	inputs = fixed_outputs.reshape(16*16, 28, 28).cpu().detach().numpy()
+	show_batch(inputs, 0, grayscale=True)
 
-while len(fixed_input) < 128:
-  fixed_input = torch.cat([fixed_input, next_input])
+	return
 
-# fixed_input = torch.randn(128, 2)
-fixed_input = fixed_input.to(device)
-fixed_outputs = generator(fixed_input)
-inputs = fixed_outputs.reshape(16*16, 28, 28).cpu().detach().numpy()
-show_batch(inputs, 0, grayscale=True)
+def latent_space():
+	"""
+	Plot a 10x10 grid of outputs from the latent space (assumes 100-dimensional space)
 
-torch.save(discriminator.state_dict(), 'discriminator.pth')
-torch.save(generator.state_dict(), 'generator.pth')
-# download checkpoint file
-files.download('discriminator.pth')
-files.download('generator.pth')
+	Args:
+		None
 
-# fixed_input = torch.tensor([-0.4878,  2.4633]).to(device)
-# new_output = generator(fixed_input)
-# adversarial_input = new_output.reshape(28, 28).cpu().detach().numpy()
-# plt.imshow(adversarial_input)
-# plt.show()
-# print (fixed_input)
-# input_grad = input_gradient(generator, fixed_input, 784)
-# adversarial_input = fixed_input
-# adversarial_input = adversarial_input + 0.1 * torch.sign(input_grad)
+	Returns:
+		None (saves png image in call to show_batch())
+	"""
+	
+	fixed_input = torch.randn(1, 100)
+	final_input = fixed_input.clone()
+	for i in range(10):
+		for j in range(10):
+			new_input = fixed_input.clone()
+			new_input[0][1:20] += 0.25 * (i+1)
+			new_input[0][20:40] -= 0.25* (j+1)
+			new_input[0][40:60] += 0.25 * (i+1)
+			new_input[0][60:80] -= 0.25 * (j+1)
+			new_input[0][80:100] += 0.25 * (j+1)
+			final_input = torch.cat([final_input, new_input])
 
-# print (adversarial_input)
-# new_output = generator(adversarial_input)
-# adversarial_input = new_output.reshape(28, 28).cpu().detach().numpy()
-# plt.imshow(adversarial_input)
-# plt.show()
-# plt.close()
+	images = generator(final_input[1:101]).reshape(len(fixed_input[0]), 28, 28).detach().numpy()
+	show_batch(images, 0, grayscale=True)
+	return
+
+
+if __name__ == '__main__':
+	epochs = 3000
+	discriminator = FCnet().to(device)
+	generator = InvertedFC().to(device)
+	count_parameters(discriminator)
+
+	loss_fn = nn.BCELoss()
+	discriminator_optimizer = torch.optim.Adam(discriminator.parameters(), lr=0.0002)
+	generator_optimizer = torch.optim.Adam(generator.parameters(), lr=0.0002)
+	train_generative_adversaries(dataloader, discriminator, discriminator_optimizer, generator, generator_optimizer, loss_fn, epochs)
+
+	torch.save(discriminator.state_dict(), 'discriminator.pth')
+	torch.save(generator.state_dict(), 'generator.pth')
+
+	# download checkpoint file (for use in colab)
+	files.download('discriminator.pth')
+	files.download('generator.pth') 
+	latent_space()
+	
 
 

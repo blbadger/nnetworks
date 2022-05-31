@@ -408,7 +408,7 @@ def show_batch(input_batch, count=0, grayscale=False):
 		individuals: Bool, if True then plots 1x3 image figs for each batch element
 		count: int
 
-	returns:
+	Returns:
 		None (saves .png img)
 
 	"""

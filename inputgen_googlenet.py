@@ -220,6 +220,7 @@ def generate_singleinput(model, input_tensors, output_tensors, index, count, ran
 		single_input = octave(single_input, target_output, 220, [1.5, 1], [2.4, 0.8], 0, pad=False, crop=False)
 
 	single_input = torchvision.transforms.Resize([490, 490])(single_input)
+	# single_input = octave(Inception, single_input, target_output, 1500, [1.7, 0.3], [1.5, 0.3], 475, pad=False, crop=True) 
 	single_input = octave(single_input, target_output, 500, [1.3, 0.45], [1.5, 0.4], 470, pad=False, crop=True) # 450 image size for pad
 
 	save_image(single_input, index)

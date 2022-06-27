@@ -1,6 +1,6 @@
-# deep_dream.py
-# A deep convolutional net for image classification
-# implemented with a functional pytorch model
+# feature_visualization.py
+# Visualizes the input that maximally activates chosen 
+# features from popular image-classification neural networks
 
 # import standard libraries
 import time
@@ -34,7 +34,7 @@ class ImageDataset(Dataset):
 	sampling of images to prevent overfitting
 	"""
 
-	def __init__(self, img_dir, transform=None, target_transform=None, image_type='.png', image_size=299):
+	def __init__(self, img_dir, transform=None, target_transform=None, image_type='.png'):
 		# specify image labels by folder name 
 		self.img_labels = [item.name for item in data_dir.glob('*')]
 
@@ -46,7 +46,6 @@ class ImageDataset(Dataset):
 		self.img_dir = img_dir
 		self.transform = transform
 		self.target_transform = target_transform
-		self.image_size = image_size
 
 	def __len__(self):
 		return len(self.image_name_ls)
@@ -54,9 +53,10 @@ class ImageDataset(Dataset):
 	def __getitem__(self, index):
 		# path to image
 		img_path = os.path.join(self.image_name_ls[index])
-		image = torchvision.io.read_image(img_path) # convert image to tensor of ints
+		image = torchvision.io.read_image(img_path) # convert image to tensor of ints , torchvision.io.ImageReadMode.GRAY
 		image = image / 255. # convert ints to floats in range [0, 1]
-		image = torchvision.transforms.Resize(size=[self.image_size, self.image_size])(image)
+		image = torchvision.transforms.Resize(size=[299, 299])(image)
+		# image = torchvision.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))(image)	
 
 		# assign label to be a tensor based on the parent folder name
 		label = os.path.basename(os.path.dirname(self.image_name_ls[index]))
@@ -70,15 +70,13 @@ class ImageDataset(Dataset):
 
 		return image, label_tens
 
-
 # specify batch size
 minibatch_size = 16
-train_data = ImageDataset(data_dir, image_type='.jpg', image_size=500)
+# train_data = ImageDataset(data_dir, image_type='.jpg')
 # train_dataloader = DataLoader(train_data, batch_size=minibatch_size, shuffle=True)
 # send model to GPU if available
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print (f"Device: {device}")
-
 
 def random_crop(input_image, size):
 	"""
@@ -126,7 +124,7 @@ def save_image(single_input, count):
 	plt.close()
 	return
 
-def octave(single_input, target_output, iterations, learning_rates, sigmas, size, index, crop=True, blur=True):
+def octave(single_input, target_output, iterations, learning_rates, sigmas, size, index, crop=True):
 	"""
 	Perform an octave (scaled) gradient descent on the input.
 
@@ -155,23 +153,21 @@ def octave(single_input, target_output, iterations, learning_rates, sigmas, size
 		else:
 			cropped_input, crop_height, crop_width = random_crop(single_input.detach(), len(single_input[0][0]))
 			size = len(single_input[0][0])
-
 		single_input = single_input.detach() # remove the gradient for the input (if present)
 		input_grad = layer_gradient(newmodel, cropped_input, target_output, index) # compute input gradient
 		single_input[:, :, crop_height:crop_height+size, crop_width:crop_width+size] -= (start_lr*(iterations-i)/iterations + end_lr*i/iterations)* input_grad # gradient descent step
-		if blur:
-			single_input[:, :, crop_height:crop_height+size, crop_width:crop_width+size] = torchvision.transforms.functional.gaussian_blur(single_input[:, :, crop_height:crop_height+size, crop_width:crop_width+size], 3, sigma=(start_sigma*(iterations-i)/iterations + end_sigma*i/iterations))
+		single_input[:, :, crop_height:crop_height+size, crop_width:crop_width+size] = torchvision.transforms.functional.gaussian_blur(single_input[:, :, crop_height:crop_height+size, crop_width:crop_width+size], 3, sigma=(start_sigma*(iterations-i)/iterations + end_sigma*i/iterations))
 
 	return single_input
 
 
 def generate_singleinput(model, input_tensors, output_tensors, index, count, random_input=True):
 	"""
-	Generates an input for a given output category
+	Generates an input for a given output
 
 	Args:
-		input_tensors: torch.Tensor object, minibatch of inputs
-		output_tensors: torch.Tensor object, minibatch of outputs
+		input_tensor: torch.Tensor object, minibatch of inputs
+		output_tensor: torch.Tensor object, minibatch of outputs
 		index: int, index of input desired
 		count: int, time step
 	kwargs: 
@@ -184,6 +180,8 @@ def generate_singleinput(model, input_tensors, output_tensors, index, count, ran
 	random.seed(manualSeed)
 	torch.manual_seed(manualSeed)
 
+	class_index = 362
+
 	if random_input:
 		single_input = (torch.rand(1, 3, 299, 299))/10 + 0.5 # scaled  distribution initialization
 	else:
@@ -194,14 +192,22 @@ def generate_singleinput(model, input_tensors, output_tensors, index, count, ran
 	single_input = single_input.reshape(1, 3, 299, 299)
 	original_input = torch.clone(single_input).reshape(3, 299, 299).permute(1, 2, 0).cpu().detach().numpy()
 	target_output = torch.tensor([class_index], dtype=int)
+ 
+	# for i in range(200):
+	# 	single_input = single_input.detach() # remove the gradient for the input (if present)
+	# 	input_grad = layer_gradient(model, single_input, target_output, index) # compute input gradient
+	# 	single_input = single_input - 0.15 * input_grad # gradient descent step
 
 	single_input = octave(single_input, target_output, 100, [0.5, 0.4], [2.4, 0.8], 0, index, crop=False)
-
+	# save_image(single_input, 0)
+ 
 	single_input = torchvision.transforms.Resize([380, 380])(single_input)
 	single_input = octave(single_input, target_output, 100, [0.4, 0.3], [1.5, 0.4], 330, index, crop=False)
+	# save_image(single_input, 0)
 
 	single_input = torchvision.transforms.Resize([460, 460])(single_input)
 	single_input = octave(single_input, target_output, 100, [0.3, 0.2], [1.1, 0.3], 375, index, crop=False)
+	# save_image(single_input, 0)
 
 	image_dim = len(single_input[0][0])
 	target_input = single_input.reshape(3, image_dim, image_dim).permute(1, 2, 0).cpu().detach().numpy()
@@ -221,58 +227,6 @@ def generate_singleinput(model, input_tensors, output_tensors, index, count, ran
 	# plt.close()
 
 	return target_input
-
-
-
-def generate_highres_dream(model, input_tensors, output_tensors, index, count):
-	"""
-	Generates a high resolution deep dream image. Expects an input
-	of size 500x500
-
-	Args:
-		input_tensors: torch.Tensor object
-		output_tensors: torch.Tensor object
-		index: int, index of input desired
-		count: int, time step
-	kwargs: 
-		random_input: bool, if True then a random input is used (index is ignored)
-
-	returns:
-		None (saves .png image)
-	"""
-	manualSeed = 999
-	random.seed(manualSeed)
-	torch.manual_seed(manualSeed)
-
-	single_input = input_tensors[index].to(device)
-	original_input = torch.clone(single_input).reshape(3, 500, 500).permute(1, 2, 0).cpu().detach().numpy()
-	single_input = single_input.reshape(1, 3, 500, 500)
-	original_input = torch.clone(single_input).reshape(3, 500, 500).permute(1, 2, 0).cpu().detach().numpy()
-	target_output = torch.tensor([class_index], dtype=int)
-	single_input = octave(single_input, target_output, 100, [0.5, 0.4], [2.4, 0.8], 0, index, crop=False)
- 
-	single_input = torchvision.transforms.Resize([600, 600])(single_input)
-	single_input = octave(single_input, target_output, 100, [0.4, 0.3], [1.5, 0.4], 330, index, crop=False)
-
-	single_input = torchvision.transforms.Resize([900, 900])(single_input)
-	single_input = octave(single_input, target_output, 100, [0.3, 0.2], [1.1, 0.3], 375, index, crop=False)
-
-	image_dim = len(single_input[0][0])
-	target_input = single_input.reshape(3, image_dim, image_dim).permute(1, 2, 0).cpu().detach().numpy()
-	plt.figure(figsize=(20, 15))
-	plt.subplot(1, 2, 1)
-	plt.axis('off')
-	plt.imshow(original_input, alpha=1)
-	plt.tight_layout()
-
-	plt.subplot(1, 2, 2)
-	plt.axis('off')
-	plt.imshow(target_input, alpha=1)
-	plt.tight_layout()
-	plt.show()
-
-	return target_input
-
 
 def loss_gradient(model, input_tensor, true_output, output_dim):
 	"""
@@ -298,7 +252,6 @@ def loss_gradient(model, input_tensor, true_output, output_dim):
 	gradient = input_tensor.grad
 	return gradient
 
-
 def target_tensor_gradient(model, input_tensor, desired_output, minibatch_size):
 	"""
 	Compute the gradient of the output (logits) with respect to the input 
@@ -313,7 +266,6 @@ def target_tensor_gradient(model, input_tensor, desired_output, minibatch_size):
 		gradient: torch.tensor.grad on the input tensor after backpropegation
 
 	"""
-
 	input_tensor.requires_grad = True
 	output = model(input_tensor)
 	loss = torch.sum(desired_output - output) + 0.001 * torch.abs(input_tensor).sum() 
@@ -340,9 +292,11 @@ def layer_gradient(model, input_tensor, desired_output, index):
 
 	input_tensor.requires_grad = True
 	output = model(input_tensor).to(device)
-	focus = output[0][:][:][:]
+	# row = index // 4 + 4
+	# col = index % 4 + 4 # [row][col]
+	focus = output[0][100+index][:][:]
 	target = torch.ones(focus.shape).to(device)*200
-	loss = 0.001*torch.sum(target - focus) #0.002 for 6b
+	loss = torch.sum(target - focus)
 	loss.backward()
 	gradient = input_tensor.grad
 
@@ -363,15 +317,15 @@ def double_layer_gradient(model, input_tensor, desired_output, index):
 	output = model(input_tensor).to(device)
 	output2 = newmodel2(input_tensor).to(device)
 
-	focus = output[0][:][:][:]
-	focus2 = output2[0][:][:][:]
+	focus = output[0][200+index][:][:]
+	focus2 = output2[0][500-index][:][:]
 
 	target = torch.ones(focus.shape).to(device)*200
 	target2 = torch.ones(focus2.shape).to(device)*200
 
 	output = model(input_tensor)
 	loss = torch.sum(torch.abs(output))
-	loss = 0.0001*(torch.sum(target - focus) + torch.sum(target2 - focus2))
+	loss = 0.5*(torch.sum(target - focus) + torch.sum(target2 - focus2))
 	loss.backward() # back-propegate loss
 	gradient = input_tensor.grad
 
@@ -395,18 +349,15 @@ def generate_dream(dataloader, model, count=0):
 
 	model.eval()
 	ls = []
-
-	for x, y in train_dataloader:
-		break
-
+	# for x, y in train_dataloader:
+	# 	break
 	for i in range(16):
-		ls.append(generate_singleinput(model, x, [], i, count, random_input=False))
-
+		ls.append(generate_singleinput(model, [], [], i, count, random_input=True))
 	show_batch(ls, grayscale=False)
 	# observe the original images
-	x = x.reshape(16, 3, 299, 299).permute(0, 2, 3, 1).cpu().detach().numpy()
-	show_batch(x, grayscale=False)
-
+	# x = x.reshape(16, 3, 299, 299).permute(0, 2, 3, 1).cpu().detach().numpy()
+	# show_batch(x, grayscale=False)
+	model.train()
 	return
 
 
@@ -501,17 +452,17 @@ class NewModel(nn.Module):
 		# N x 288 x 35 x 35
 		x = self.model.Mixed_6a(x)
 		# N x 768 x 17 x 17
-		# x = self.model.Mixed_6b(x)
+		x = self.model.Mixed_6b(x)
 		# N x 768 x 17 x 17
-		# x = self.model.Mixed_6c(x)
+		x = self.model.Mixed_6c(x)
 		# N x 768 x 17 x 17
-		# x = self.model.Mixed_6d(x)
+		x = self.model.Mixed_6d(x)
 		# N x 768 x 17 x 17
-		# x = self.model.Mixed_6e(x)
+		x = self.model.Mixed_6e(x)
 		# N x 768 x 17 x 17
-		# aux = self.model.AuxLogits(x)
+		aux = self.model.AuxLogits(x)
 		# N x 768 x 17 x 17
-		# x = self.model.Mixed_7a(x)
+		x = self.model.Mixed_7a(x)
 		# N x 1280 x 8 x 8
 		# x = self.model.Mixed_7b(x)
 		# N x 2048 x 8 x 8
@@ -532,23 +483,23 @@ class NewModel2(nn.Module):
 		# N x 32 x 147 x 147
 		x = self.model.Conv2d_2b_3x3(x)
 		# N x 64 x 147 x 147
-		# x = self.model.maxpool1(x)
+		x = self.model.maxpool1(x)
 		# N x 64 x 73 x 73
-		# x = self.model.Conv2d_3b_1x1(x)
+		x = self.model.Conv2d_3b_1x1(x)
 		# N x 80 x 73 x 73
-		# x = self.model.Conv2d_4a_3x3(x)
+		x = self.model.Conv2d_4a_3x3(x)
 		# N x 192 x 71 x 71
-		# x = self.model.maxpool2(x)
+		x = self.model.maxpool2(x)
 		# N x 192 x 35 x 35
-		# x = self.model.Mixed_5b(x)
+		x = self.model.Mixed_5b(x)
 		# N x 256 x 35 x 35
-		# x = self.model.Mixed_5c(x)
+		x = self.model.Mixed_5c(x)
 		# N x 288 x 35 x 35
-		# x = self.model.Mixed_5d(x)
+		x = self.model.Mixed_5d(x)
 		# N x 288 x 35 x 35
-		# x = self.model.Mixed_6a(x)
+		x = self.model.Mixed_6a(x)
 		# N x 768 x 17 x 17 	
-		# x = self.model.Mixed_6b(x)
+		x = self.model.Mixed_6b(x)
 		# N x 768 x 17 x 17
 		# x = self.model.Mixed_6c(x)
 		# N x 768 x 17 x 17
@@ -567,7 +518,7 @@ class NewModel3(nn.Module):
 			# N x 64 x 112 x 112
 			x = self.model.maxpool1(x)
 			# N x 64 x 56 x 56
-			x = self.model.conv2(x)
+			# x = self.model.conv2(x)
 			# N x 64 x 56 x 56
 			# x = self.model.conv3(x)
 			# N x 192 x 56 x 56
@@ -633,11 +584,9 @@ googlenet = torch.hub.load('pytorch/vision:v0.10.0', 'googlenet', pretrained=Tru
 resnet = torch.hub.load('pytorch/vision:v0.10.0', 'resnet50', pretrained=True).to(device)
 
 if __name__ == '__main__':
-	newmodel = NewModel(Inception3)
+	# newmodel = NewModel(Inception3)
 	# newmodel2 = NewModel2(Inception3)
 	# newmodel = NewModel3(googlenet)
-	# newmodel = NewModel4(resnet)
+	newmodel = NewModel4(resnet)
 	newmodel.eval()
 	generate_dream(None, newmodel, 0)
-
-

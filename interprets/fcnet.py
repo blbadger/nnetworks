@@ -38,7 +38,7 @@ class MultiLayerPerceptron(nn.Module):
 		self.hidden2hidden2 = nn.Linear(hidden2_size, hidden3_size)
 		self.hidden2output = nn.Linear(hidden3_size, output_size)
 		self.relu = nn.ReLU()
-		self.dropout = nn.Dropout(0.3)
+		self.dropout = nn.Dropout(0.)
 
 	def forward(self, input):
 		"""
@@ -63,9 +63,10 @@ class MultiLayerPerceptron(nn.Module):
 		out = self.hidden2hidden2(out)
 		out = self.relu(out)
 		out = self.dropout(out)
+		embedding = out
 
 		output = self.hidden2output(out)
-		return output
+		return output, embedding
 
 
 class Format:
@@ -234,7 +235,7 @@ class ActivateNet:
 		input_size = len(self.input_tensors[0])
 		self.model = MultiLayerPerceptron(input_size, output_size)
 		self.optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-4)
-		self.biases_arr = [[], [], []]
+		self.biases_arr = [[], [], []] # for plotting bias
 
 	@staticmethod
 	def count_parameters(model):
@@ -322,7 +323,7 @@ class ActivateNet:
 
 		"""
 		# self.model.train()
-		output = self.model(input_tensor)
+		output, _ = self.model(input_tensor)
 		output_tensor = output_tensor.reshape(minibatch_size, 1)
 		loss_function = torch.nn.L1Loss()
 		loss = loss_function(output, output_tensor)
@@ -349,7 +350,7 @@ class ActivateNet:
 			for i in range(len(self.validation_inputs)):
 				input_tensor = self.validation_inputs[i]
 				output_tensor = self.validation_outputs[i]
-				model_output = self.model(input_tensor)
+				model_output, _ = self.model(input_tensor)
 				model_outputs.append(float(model_output))
 
 		plt.scatter([float(i) for i in self.validation_outputs], model_outputs, s=1.5)
@@ -451,6 +452,44 @@ class ActivateNet:
 
 		return
 
+	def plot_embedding(self, index=0):
+		"""
+		Generates a scatterplot of all pairs of embeddings versus the input
+		distance of significance (ie the output for a control experiment)
+
+		Args:
+			None
+
+		Returns:
+			None (saves .png)
+		"""
+
+		self.model.eval() # switch to evaluation mode (silence dropouts etc.)
+		number_of_examples = 200
+		actual_arr, embedding_arr = [], []
+		for i in range(number_of_examples):
+			input_tensor = self.validation_inputs[i]
+			output_tensor = self.validation_outputs[i]
+			model_output, embedding = self.model(input_tensor)
+			actual_arr.append(float(output_tensor))
+			embedding_arr.append(embedding)
+
+		actual_distances, embedding_distances = [], []
+		for i in range(len(embedding_arr) - 1):
+			for j in range(i, len(embedding_arr)):
+				actual_distances.append(np.abs(actual_arr[j] - actual_arr[i]))
+				embedding_distance = torch.sum(torch.abs(embedding_arr[j] - embedding_arr[i])).detach().numpy()
+				embedding_distances.append(embedding_distance)
+
+		plt.scatter(actual_distances, embedding_distances, s=0.3)
+		plt.xlabel('Actual Distance')
+		plt.ylabel('Embedding Distance')
+		plt.rcParams.update({'font.size': 6})
+		# plt.show()
+		plt.savefig('embedding{0:04d}'.format(index), dpi=390)
+		plt.close()
+		return
+
 
 	def train_model(self, minibatch_size=32):
 		"""
@@ -477,7 +516,7 @@ class ActivateNet:
 			total_loss = 0
 
 			for i in range(0, len(input_tensors) - minibatch_size, minibatch_size):
-				print (count)
+				# print (count)
 				input_batch = torch.stack(input_tensors[i:i + minibatch_size])
 				output_batch = torch.stack(output_tensors[i:i + minibatch_size])
 
@@ -487,9 +526,10 @@ class ActivateNet:
 
 				output, loss = self.train_minibatch(input_batch, output_batch, minibatch_size)
 				total_loss += loss
-				if count % 25 == 0:
+				if count % 100 == 0:
+					self.plot_embedding(index=count//100)
 					# interpret = StaticInterpret(self.model, self.validation_inputs, self.validation_outputs)
-					self.plot_predictions(count//25)
+					# self.plot_predictions(count//25)
 					# interpret.heatmap(count, method='combined')
 				count += 1
 
@@ -519,7 +559,7 @@ class ActivateNet:
 			for i in range(len(self.validation_inputs)):
 				input_tensor = self.validation_inputs[i]
 				output_tensor = self.validation_outputs[i]
-				model_output = self.model(input_tensor)
+				model_output, _ = self.model(input_tensor)
 				total_error += loss(model_output, output_tensor).item()
 
 		print (f'Test Average Absolute Error: {round(total_error / len(self.validation_inputs), 2)}')
@@ -529,7 +569,7 @@ class ActivateNet:
 			for i in range(len(self.input_tensors[:2000])):
 				input_tensor = self.input_tensors[i]
 				output_tensor = self.output_tensors[i]
-				model_output = self.model(input_tensor)
+				model_output, _ = self.model(input_tensor)
 				total_error += loss(model_output, output_tensor).item()
 
 		print (f'Training Average Absolute Error: {round(total_error / len(self.validation_inputs), 2)}')
@@ -558,12 +598,12 @@ class ActivateNet:
 		return prediction_array
 
 
-network = ActivateNet(200)
+network = ActivateNet(100)
 network.train_model()
 network.test_model()
+network.plot_embedding()
 
 input_tensors, output_tensors = network.validation_inputs, network.validation_outputs
-print (input_tensors[0].shape)
 model = network.model
 interpret = StaticInterpret(model, input_tensors, output_tensors)
 interpret.readable_interpretation(1, method='average')

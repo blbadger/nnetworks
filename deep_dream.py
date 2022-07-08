@@ -16,7 +16,8 @@ from torch.nn import Conv2d
 from torch.utils.data import DataLoader, Dataset
 import torchvision
 import matplotlib.pyplot as plt
-from google.colab import files
+from prettytable import PrettyTable
+# from google.colab import files
 
 # files.upload() # upload flower_photos_2
 # !unzip flower_photos_2.zip
@@ -631,6 +632,7 @@ loss_fn = nn.CrossEntropyLoss()
 Inception3 = torch.hub.load('pytorch/vision:v0.10.0', 'inception_v3', pretrained=True).to(device)
 googlenet = torch.hub.load('pytorch/vision:v0.10.0', 'googlenet', pretrained=True).to(device)
 resnet = torch.hub.load('pytorch/vision:v0.10.0', 'resnet50', pretrained=True).to(device)
+count_parameters(Inception3)
 
 if __name__ == '__main__':
 	newmodel = NewModel(Inception3)

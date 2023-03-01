@@ -19,7 +19,6 @@ from torch.nn import Conv2d
 from torch.utils.data import DataLoader, Dataset
 import torchvision
 import matplotlib.pyplot as plt
-import torch
 from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions
 
 model = torch.hub.load('huggingface/transformers', 'modelForCausalLM', 'gpt2')  
@@ -33,68 +32,8 @@ manualSeed = 999
 random.seed(manualSeed)
 torch.manual_seed(manualSeed)
 
-def octave(single_input, target_output, iterations, learning_rates, index):
-	"""
-	Perform an octave (scaled) gradient descent on the input.
 
-	Args:
-		single_input: torch.tensor of the input
-		target_output: torch.tensor of the desired output category
-		iterations: int, the number of iterations desired
-		learning_rates: arr[int, int], pair of integers corresponding to start and end learning rates
-		sigmas: arr[int, int], pair of integers corresponding to the start and end Gaussian blur sigmas
-		size: int, desired dimension of output image (size = length = width)
-
-	kwargs:
-		pad: bool, if True then padding is applied at each iteration of the octave
-		crop: bool, if True then gradient descent is applied to cropped sections of the input
-
-	Returns:
-		single_input: torch.tensor of the transformed input
-	"""
-
-	start_lr, end_lr = learning_rates
-	original_input = single_input.clone()
-	losses, i_arr = [], []
-
-	for i in range(iterations):
-		input_grad, loss = layer_gradient(model, single_input, target_output, index)
-		single_input = single_input.detach()
-		single_input -= (start_lr*(iterations-i)/iterations + end_lr*i/iterations)*input_grad
-		if i > 20:
-			losses.append(loss)
-			i_arr.append(i)
-		# logits = torch.matmul(single_input.clone(), inverse_embedding)
-		# tokens = torch.argmax(logits, dim=2)[0]
-		# with torch.no_grad():
-		#     single_input = model.transformer.wte(tokens).reshape(input_grad.shape)
-
-	# plt.scatter(i_arr, losses, s=1)
-	# plt.ylim((0, 500000))
-	# plt.savefig('scatter.png', dpi=250)
-	# plt.close()
-	return single_input
-
-def generate_singleinput(model, target, index, lr=2): # 0.0007
-	"""
-	Generates an input for a given output
-
-	Args:
-		input_tensor: torch.Tensor object, minibatch of inputs
-		output_tensor: torch.Tensor object, minibatch of outputs
-	kwargs: 
-		lr: float, learning rate
-
-	returns:
-		None (saves .png image)
-	"""
-	random_input = torch.randn(embedding.shape).to(device)
-	single_input = octave(random_input, target, 1000, [lr, lr/10], index)
-	
-	return single_input
-
-
-def layer_gradient(model, input_tensor, target, index):
+def layer_gradient(model, input_tensor):
 	"""
 	Compute the gradient of some layer (chosen previously to be the model output)
 	w.r.t the input.
@@ -112,16 +51,27 @@ def layer_gradient(model, input_tensor, target, index):
 
 	input_tensor.requires_grad = True
 	output = a_model(input_tensor)
-	loss = 0.1*torch.sum(torch.abs(target - output))
+	loss = torch.sum(output)
 	loss.backward()
 	gradient = input_tensor.grad
-	print (torch.min(torch.abs(gradient)))
-
 	return gradient, loss.item()
+
+def target_gradient(model, input_tensor, target_output):
+	"""
+
+	"""
+
+	input_tensor.requires_grad = True
+	output = a_model(input_tensor)
+	loss = torch.sum(torch.abs(output - target_output))
+	print (loss.item())
+	loss.backward()
+	gradient = input_tensor.grad
+	return gradient
 
 class FCNet(nn.Module):
 
-	def __init__(self, input_length=6, hidden_dim=768):
+	def __init__(self, input_length=5, hidden_dim=768):
 		super().__init__()
 		self.input = nn.Linear(input_length * hidden_dim, 4 * input_length * hidden_dim)
 		self.h2h = nn.Linear(4 * input_length * hidden_dim, input_length * hidden_dim)
@@ -165,7 +115,7 @@ class InputGPT(nn.Module):
 	def forward(self, x):
 		embedding = self.model.transformer.wte(x)
   
-		for i in range(12):
+		for i in range(1):
 			x = self.model.transformer.h[i](x)[0]
 
 		return x
@@ -196,19 +146,49 @@ tokens = torch.argmax(logits, dim=2)[0]
 output = tokenizer.decode(tokens)
 print (output)
 
-a_model = AbbreviatedGPT(model).to(device)
-# a_model = FCNet().to(device)  
+# a_model = AbbreviatedGPT(model).to(device)
+a_model = FCNet().to(device)  
 a_model.eval()
 with torch.no_grad():
 	shifted_target_tensor = a_model(shifted_embedding).to(device)
 	target_tensor = a_model(embedding).to(device)
 print (f'Shifted output distance: {torch.sum(torch.abs(shifted_target_tensor - target_tensor))}')
+original_embedding = torch.clone(embedding)
 
-embedding = embedding.detach()
-generated_input = generate_singleinput(a_model, target_tensor, 0)
-generated_target_tensor = a_model(generated_input).to(device)
-print (f'Generated output distance: {torch.sum(torch.abs(generated_target_tensor - target_tensor))}')
-logits = torch.matmul(generated_input - positional_embedding, inverse_embedding)
+def tangent_walk(embedding):
+	original_embedding = torch.clone(embedding)
+	for i in range(10):
+		embedding = embedding.detach()
+		gradient, _ = layer_gradient(a_model, embedding)
+		gradient = torch.squeeze(gradient, dim=0) # remove batch dim
+		perp_vector = torch.linalg.svd(gradient).Vh[-16] # any index greater than input_length
+		embedding = embedding + 0.1*perp_vector
+		print (gradient @ perp_vector) # check for orthogonality via mat mult
+
+	return embedding
+
+def clamped_walk(embedding):
+	with torch.no_grad():
+		target_output = a_model(embedding)
+	embedding = embedding.detach()
+
+	for i in range(300):
+		clamped = torch.randint(768, (1,))
+		shape = embedding[:, :, clamped:].shape
+		embedding[:, :, clamped:] += 0.01*torch.rand(shape).to(device)
+		for i in range(10):
+			gradient = target_gradient(a_model, embedding, target_output)
+			embedding = embedding.detach()
+			embedding[:, :, :clamped] = embedding[:, :, :clamped] - 0.01*gradient[:, :, :clamped]
+		
+	return embedding
+
+
+gen_embedding = tangent_walk(embedding)
+generated_target_tensor = a_model(gen_embedding).to(device)
+print (f'Generated Input Distance: {torch.sum(torch.abs(gen_embedding - original_embedding))}')
+print (f'Generated Output distance: {torch.sum(torch.abs(generated_target_tensor - target_tensor))}')
+logits = torch.matmul(gen_embedding - positional_embedding, inverse_embedding)
 # tokens = torch.argmax(logits, dim=2)[0]
 tokens = torch.topk(logits, 5)[1][0] # indicies of topk of tensor
 print (tokens)

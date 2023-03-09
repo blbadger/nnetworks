@@ -33,7 +33,7 @@ random.seed(manualSeed)
 torch.manual_seed(manualSeed)
 
 
-def layer_gradient(model, input_tensor):
+def layer_gradient(model, input_tensor, flat=False):
 	"""
 	Compute the gradient of some layer (chosen previously to be the model output)
 	w.r.t the input.
@@ -50,10 +50,21 @@ def layer_gradient(model, input_tensor):
 	"""
 
 	input_tensor.requires_grad = True
-	output = a_model(input_tensor)
-	loss = torch.sum(output)
-	loss.backward()
-	gradient = input_tensor.grad
+	gradient2 = torch.zeros(gradient.shape).to(device)
+	if flat:
+		for i in range(len(output)):
+			output = a_model(input_tensor) 
+			loss = output[i]
+			loss.backward()
+			gradient2 += input_tensor.grad
+	else:
+		for i in range(len(output[0])):
+			for j in range(len(output[0][0])):
+					output = a_model(input_tensor)
+					loss = output[0, i, j]
+					loss.backward()
+					gradient2 += input_tensor.grad
+
 	return gradient, loss.item()
 
 def target_gradient(model, input_tensor, target_output):
@@ -73,8 +84,8 @@ class FCNet(nn.Module):
 
 	def __init__(self, input_length=5, hidden_dim=768):
 		super().__init__()
-		self.input = nn.Linear(input_length * hidden_dim, 4 * input_length * hidden_dim)
-		self.h2h = nn.Linear(4 * input_length * hidden_dim, input_length * hidden_dim)
+		self.input = nn.Linear(input_length * hidden_dim, 4 *input_length * hidden_dim)
+		self.h2h = nn.Linear(4 * input_length * hidden_dim, 50)
 		self.h2out = nn.Linear(10000, 10000)
 		self.gelu = nn.GELU()
 		self.input_length = input_length
@@ -100,7 +111,7 @@ class AbbreviatedGPT(nn.Module):
 	def forward(self, x: torch.Tensor):
 		# Reshape and permute the input tensor
 
-		for i in range(1):
+		for i in range(12):
 			x = self.model.transformer.h[i](x)[0]
 
 		# x = self.model.lm_head(x)
@@ -146,23 +157,31 @@ tokens = torch.argmax(logits, dim=2)[0]
 output = tokenizer.decode(tokens)
 print (output)
 
-# a_model = AbbreviatedGPT(model).to(device)
-a_model = FCNet().to(device)  
+def choose_model(model='GPT'):
+	if model == 'GPT':
+		a_model = AbbreviatedGPT(model).to(device)
+	else:
+		a_model = FCNet().to(device)
+	return a_model
+
+a_model = choose_model(model='GPT')
 a_model.eval()
+
 with torch.no_grad():
 	shifted_target_tensor = a_model(shifted_embedding).to(device)
 	target_tensor = a_model(embedding).to(device)
 print (f'Shifted output distance: {torch.sum(torch.abs(shifted_target_tensor - target_tensor))}')
+
 original_embedding = torch.clone(embedding)
 
 def tangent_walk(embedding):
-	original_embedding = torch.clone(embedding)
-	for i in range(10):
+	for i in range(15):
 		embedding = embedding.detach()
 		gradient, _ = layer_gradient(a_model, embedding)
 		gradient = torch.squeeze(gradient, dim=0) # remove batch dim
-		perp_vector = torch.linalg.svd(gradient).Vh[-16] # any index greater than input_length
-		embedding = embedding + 0.1*perp_vector
+		perp_vector = torch.linalg.svd(gradient).Vh[-1] # any index greater than input_length
+		original_embedding = embedding.clone()
+		embedding = embedding + 1*perp_vector
 		print (gradient @ perp_vector) # check for orthogonality via mat mult
 
 	return embedding
@@ -172,14 +191,14 @@ def clamped_walk(embedding):
 		target_output = a_model(embedding)
 	embedding = embedding.detach()
 
-	for i in range(300):
+	for i in range(10):
 		clamped = torch.randint(768, (1,))
 		shape = embedding[:, :, clamped:].shape
-		embedding[:, :, clamped:] += 0.01*torch.rand(shape).to(device)
-		for i in range(10):
+		embedding[:, :, clamped:] += 0.0002*torch.rand(shape).to(device)
+		for i in range(31):
 			gradient = target_gradient(a_model, embedding, target_output)
 			embedding = embedding.detach()
-			embedding[:, :, :clamped] = embedding[:, :, :clamped] - 0.01*gradient[:, :, :clamped]
+			embedding[:, :, :clamped] = embedding[:, :, :clamped] - 0.00002*gradient[:, :, :clamped]
 		
 	return embedding
 
@@ -191,7 +210,7 @@ print (f'Generated Output distance: {torch.sum(torch.abs(generated_target_tensor
 logits = torch.matmul(gen_embedding - positional_embedding, inverse_embedding)
 # tokens = torch.argmax(logits, dim=2)[0]
 tokens = torch.topk(logits, 5)[1][0] # indicies of topk of tensor
-print (tokens)
+# print (tokens)
 for i in range(5):
 	output = tokenizer.decode([o[i] for o in tokens])
 	print (output)

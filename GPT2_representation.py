@@ -196,8 +196,8 @@ tokens = torch.argmax(logits, dim=2)[0]
 output = tokenizer.decode(tokens)
 print (output)
 
-a_model = AbbreviatedGPT(model).to(device)
-# a_model = FCNet().to(device)  
+# a_model = AbbreviatedGPT(model).to(device)
+a_model = FCNet().to(device)  
 a_model.eval()
 with torch.no_grad():
 	shifted_target_tensor = a_model(shifted_embedding).to(device)

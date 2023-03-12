@@ -28,12 +28,12 @@ tokenizer = torch.hub.load('huggingface/pytorch-transformers', 'tokenizer', 'gpt
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print (f"Device: {device}")
 
-manualSeed = 999
-random.seed(manualSeed)
-torch.manual_seed(manualSeed)
+# manualSeed = 999
+# random.seed(manualSeed)
+# torch.manual_seed(manualSeed)
 
 
-def layer_gradient(model, input_tensor, flat=False):
+def layer_gradient(model, input_tensor, flat=True):
 	"""
 	Compute the gradient of some layer (chosen previously to be the model output)
 	w.r.t the input.
@@ -50,28 +50,45 @@ def layer_gradient(model, input_tensor, flat=False):
 	"""
 
 	input_tensor.requires_grad = True
-	gradient2 = torch.zeros(gradient.shape).to(device)
-	if flat:
-		for i in range(len(output)):
-			output = a_model(input_tensor) 
-			loss = output[i]
-			loss.backward()
-			gradient2 += input_tensor.grad
-	else:
-		for i in range(len(output[0])):
-			for j in range(len(output[0][0])):
-					output = a_model(input_tensor)
-					loss = output[0, i, j]
-					loss.backward()
-					gradient2 += input_tensor.grad
+	output = a_model(input_tensor)
+	output.backward(gradient=torch.ones(output.shape).to(device))
+	gradient = torch.clone(input_tensor.grad)
 
-	return gradient, loss.item()
+	# input_tensor.grad = None
+	# output = a_model(input_tensor)
+	# sout = torch.sum(output)
+	# sout.backward()
+	# gradient2 = torch.clone(input_tensor.grad)
+
+	# print (gradient2 - gradient)
+	# input_tensor.grad = None
+	# gradient3 = torch.zeros(input_tensor.shape).to(device)
+	# output = a_model(input_tensor)
+	# if flat:
+	# 	for i in range(len(output)):
+	# 		output = a_model(input_tensor) 
+	# 		loss = output[i]
+	# 		loss.backward()
+	# 		gradient3 += input_tensor.grad
+	# 		print (i)
+	# 		input_tensor.grad = None
+
+
+	# else:
+	# 	for i in range(len(output[0])):
+	# 		for j in range(len(output[0][0])):
+	# 				output = a_model(input_tensor)
+	# 				loss = output[0, i, j]
+	# 				loss.backward()
+	# 				gradient2 += input_tensor.grad
+
+	# print (gradient - gradient2)
+	return gradient, output
 
 def target_gradient(model, input_tensor, target_output):
 	"""
 
 	"""
-
 	input_tensor.requires_grad = True
 	output = a_model(input_tensor)
 	loss = torch.sum(torch.abs(output - target_output))
@@ -84,9 +101,8 @@ class FCNet(nn.Module):
 
 	def __init__(self, input_length=5, hidden_dim=768):
 		super().__init__()
-		self.input = nn.Linear(input_length * hidden_dim, 4 *input_length * hidden_dim)
-		self.h2h = nn.Linear(4 * input_length * hidden_dim, 50)
-		self.h2out = nn.Linear(10000, 10000)
+		self.input = nn.Linear(input_length*hidden_dim, 4*input_length*hidden_dim)
+		self.h2h = nn.Linear(4*input_length*hidden_dim, input_length*hidden_dim)
 		self.gelu = nn.GELU()
 		self.input_length = input_length
 	
@@ -96,10 +112,6 @@ class FCNet(nn.Module):
 		x = self.gelu(x)
 
 		x = self.h2h(x)
-		# x = self.gelu(x)
-
-		# x = self.h2out(x)
-		# x = model.lm_head(x.reshape(self.input_length, 768))
 		return x
 
 class AbbreviatedGPT(nn.Module):
@@ -142,6 +154,17 @@ tokens = tokenizer.encode(
 	  padding=False
 	  ).to(device)
 
+
+def choose_model(choice):
+	if choice == 'GPT':
+		a_model = AbbreviatedGPT(model).double().to(device)
+	else:
+		a_model = FCNet().to(device)
+	return a_model
+
+a_model = choose_model('GPT')
+a_model.eval()
+
 model = model.to(device)
 embedding = model.transformer.wte(tokens) 
 position_ids = torch.tensor([i for i in range(len(tokens))]).to(device)
@@ -157,15 +180,6 @@ tokens = torch.argmax(logits, dim=2)[0]
 output = tokenizer.decode(tokens)
 print (output)
 
-def choose_model(model='GPT'):
-	if model == 'GPT':
-		a_model = AbbreviatedGPT(model).to(device)
-	else:
-		a_model = FCNet().to(device)
-	return a_model
-
-a_model = choose_model(model='GPT')
-a_model.eval()
 
 with torch.no_grad():
 	shifted_target_tensor = a_model(shifted_embedding).to(device)
@@ -175,13 +189,13 @@ print (f'Shifted output distance: {torch.sum(torch.abs(shifted_target_tensor - t
 original_embedding = torch.clone(embedding)
 
 def tangent_walk(embedding):
-	for i in range(15):
-		embedding = embedding.detach()
+	for i in range(1):
+		embedding = embedding.double().detach()
 		gradient, _ = layer_gradient(a_model, embedding)
 		gradient = torch.squeeze(gradient, dim=0) # remove batch dim
 		perp_vector = torch.linalg.svd(gradient).Vh[-1] # any index greater than input_length
 		original_embedding = embedding.clone()
-		embedding = embedding + 1*perp_vector
+		embedding = embedding + 0.1*perp_vector
 		print (gradient @ perp_vector) # check for orthogonality via mat mult
 
 	return embedding
@@ -211,9 +225,9 @@ logits = torch.matmul(gen_embedding - positional_embedding, inverse_embedding)
 # tokens = torch.argmax(logits, dim=2)[0]
 tokens = torch.topk(logits, 5)[1][0] # indicies of topk of tensor
 # print (tokens)
-for i in range(5):
-	output = tokenizer.decode([o[i] for o in tokens])
-	print (output)
+# for i in range(5):
+# 	output = tokenizer.decode([o[i] for o in tokens])
+# 	print (output)
 
 def check_equality(input, generated_input):
 	encoded_input = tokenizer.encode(input, return_tensors='pt').to(device)
@@ -230,4 +244,4 @@ def check_equality(input, generated_input):
 
 	return next_word, next_gen_word
 
-check_equality(prompt, output)
+# check_equality(prompt, output)

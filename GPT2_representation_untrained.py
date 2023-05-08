@@ -72,7 +72,7 @@ def octave(single_input, target_output, iterations, learning_rates, index):
 
 	return single_input
 
-def generate_singleinput(model, target, index, lr=2):
+def generate_singleinput(model, target, index, lr=0.01):
 	"""
 	Generates an input for a given output
 
@@ -88,7 +88,7 @@ def generate_singleinput(model, target, index, lr=2):
 		None (saves .png image)
 	"""
 	random_input = torch.randn(embedding.shape).to(device)
-	single_input = octave(random_input, target, 500, [lr, lr/10], index)
+	single_input = octave(random_input, target, 1000, [lr, lr/10], index)
 	
 	return single_input
 
@@ -150,7 +150,7 @@ class AbbreviatedGPT(nn.Module):
 		for i in range(1):
 			x = self.model.transformer.h[i](x)[0]
 
-		# x = self.model.lm_head(x)
+		x = self.model.lm_head(x)
 		return x
 
 class OutputGPT(nn.Module):
@@ -167,7 +167,7 @@ class OutputGPT(nn.Module):
 		return x
 
 
-prompt = 'The sky is blue.'
+prompt = 'The sky is'
 
 tokens = tokenizer.encode(
 	  prompt,

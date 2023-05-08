@@ -298,7 +298,7 @@ def show_batch(input_batch, count=0, grayscale=False):
 	plt.close()
 	return
 
-def train_fcgan(dataloader, discriminator, discriminator_optimizer, generator, generator_optimizer, loss_fn, epochs):
+def train_fcgan(dataloader, discriminator, discriminator_optimizer, generator, generator_optimizer, loss_fn, epochs, regan=False):
 	"""
 	Trains the generative adversarial network model.
 
@@ -344,7 +344,6 @@ def train_fcgan(dataloader, discriminator, discriminator_optimizer, generator, g
 			discriminator_outputs = discriminator(generated_outputs).reshape(minibatch_size)
 			generator_loss = loss_fn(discriminator_outputs, torch.ones(len(y))) # pretend that all generated inputs are in the dataset
 
-			regan = True
 			if regan:
 				discriminator_loss = -generator_loss
 				discriminator_optimizer.zero_grad()

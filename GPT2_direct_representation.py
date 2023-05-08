@@ -28,7 +28,7 @@ from transformers import GPT2Config, GPT2LMHeadModel
 
 # configuration = GPT2Config()
 # model = GPT2LMHeadModel(configuration)
-# tokenizer = torch.hub.load('huggingface/pytorch-transformers', 'tokenizer', 'gpt2')
+# tokenizer = torch.hub.load('huggingface/pytorch-transformers', 'tokenizer', 'gpt2-xl')
 
 
 load_8bit = False
@@ -37,7 +37,7 @@ tokenizer = AutoTokenizer.from_pretrained("gpt2")
 print ('tokenizer downloaded or loaded from cache')
 
 
-model = AutoModelForCausalLM.from_pretrained("gpt2", load_in_8bit=load_8bit, device_map='auto')
+model = AutoModelForCausalLM.from_pretrained("gpt2-xl", load_in_8bit=load_8bit, device_map='auto')
 print ('model downloaded or loaded from cache')
 
 # send model to GPU if available
@@ -71,46 +71,16 @@ def octave(single_input, target_output, iterations, learning_rates, index):
 	start_lr, end_lr = learning_rates
 	original_input = single_input.clone()
 	losses, i_arr = [], []
-
+  
 	for i in range(iterations):
 		input_grad, loss = layer_gradient(model, single_input, target_output, index)
 		single_input = single_input.detach()
 		single_input -= (start_lr*(iterations-i)/iterations + end_lr*i/iterations)*input_grad
-		# if i > 20:
-		# 	losses.append(loss)
-		# 	i_arr.append(i)
-		# logits = torch.matmul(single_input.clone(), inverse_embedding)
-		# tokens = torch.argmax(logits, dim=2)[0]
-		# with torch.no_grad():
-		#     single_input = model.transformer.wte(tokens).reshape(input_grad.shape)
 
-	# plt.scatter(i_arr, losses, s=1)
-	# plt.ylim((0, 500000))
-	# plt.savefig('scatter.png', dpi=250)
-	# plt.close()
-	return single_input
- 
-
-def generate_singleinput(model, target, index, lr=0.1): # 0.0007
-	"""
-	Generates an input for a given output
-
-	Args:
-		input_tensor: torch.Tensor object, minibatch of inputs
-		output_tensor: torch.Tensor object, minibatch of outputs
-	kwargs: 
-		lr: float, learning rate
-
-	returns:
-		None (saves .png image)
-	""" 
-	random_input = torch.randn(embedding.shape).to(device)
-	single_input = octave(random_input, target, 2000, [lr, lr/100], index)
-	
 	return single_input
 
 
-def layer_gradient(model, input_tensor, target, index, cosine_metric=False):
+def layer_gradient(model, input_tensor, target, index):
 	"""
 	Compute the gradient of some layer (chosen previously to be the model output)
 	w.r.t the input.
@@ -130,9 +100,6 @@ def layer_gradient(model, input_tensor, target, index, cosine_metric=False):
 		input_tensor = input_tensor.half()
 	input_tensor.requires_grad = True
 	output = a_model(input_tensor)
-	output, target = output.flatten(), target.flatten()
-	if cosine_metric:
-		loss = torch.abs(torch.dot(output, target)) / (torch.norm(output, p=2) * torch.norm(target, p=2))
 	loss = torch.sum(torch.abs(target - output))
 	loss.backward()
 	gradient = input_tensor.grad
@@ -161,34 +128,6 @@ class FCNet(nn.Module):
 		# x = model.lm_head(x.reshape(self.input_length, 768))
 		return x
 
-class AbbreviatedGPT(nn.Module):
-
-	def __init__(self, model):
-		super().__init__()
-		self.model = model
-
-	def forward(self, x: torch.Tensor):
-		# Reshape and permute the input tensor
-
-		for i in range(1):
-
-			x = self.model.transformer.h[i](x)[0]
-
-		# x = self.model.lm_head(x)
-		return x
-
-class MLPGPT(nn.Module):
-
-	def __init__(self, model):
-		super().__init__()
-		self.model = model
-
-	def forward(self, x: torch.tensor):
-
-		for i in range(1):
-			x = self.model.transformer.h[i].mlp(x)
-
-		return x
 
 class InputGPT(nn.Module):
 
@@ -196,16 +135,23 @@ class InputGPT(nn.Module):
 		super().__init__()
 		self.model = model
 
-	def forward(self, x):
-		embedding = self.model.transformer.wte(x)
+	def forward(self, x: torch.tensor) -> torch.tensor:
+		# embedding = self.model.transformer.wte(x)
+
+		# replaces wte transformation
+		x = torch.matmul(x, self.model.transformer.wte.weight)
+
+		o1 = self.model.transformer.h[0](x)[0]
+		o2 = self.model.transformer.h[0](o1)[0]
+		o3 = self.model.transformer.h[0](o2)[0]
   
-		for i in range(1):
-			x = self.model.transformer.h[i](x)[0]
+		# for i in range(3):
+		# 	x = self.model.transformer.h[i](x)[0]
 
-		return x
+		return o1, o2, o3
 
 
-prompt = 'The sky is blue.'
+prompt = 'This is a prompt sentence'
 tokens = tokenizer.encode(
 	  prompt,
 	  add_special_tokens=False,
@@ -226,26 +172,41 @@ print (f'Shifted embedding distance: {torch.sum(torch.abs(embedding - shifted_em
 embedding_weight = model.transformer.wte.weight.float() # convert to float in case model is in 16-bit precision
 inverse_embedding = torch.linalg.pinv(embedding_weight)
 logits = torch.matmul(shifted_embedding - positional_embedding, inverse_embedding) # invert embedding transformations
-tokens = torch.argmax(logits, dim=2)[0]
+target_logits = torch.matmul(embedding - positional_embedding, inverse_embedding) 
+
+target_logits = torch.zeros(logits.shape).to(device)
+for i in range(len(tokens[0])):
+	target_logits[:, i, tokens[0, i]] = 10
+# print (torch.max(target_logits), torch.min(torch.abs(target_logits), target_logits))
+
+tokens = torch.argmax(target_logits, dim=2)[0]
 output = tokenizer.decode(tokens)
+print (output)
 
-a_model = AbbreviatedGPT(model).to(device)
-# a_model = MLPGPT(model).to(device)
-# a_model = FCNet().to(device)  
-
+a_model = InputGPT(model).to(device)
 a_model.eval()
+
+shifted_input = target_logits + 0.05*torch.randn(target_logits.shape).to(device)
 with torch.no_grad():
-	if load_8bit:
-		shifted_embedding = shifted_embedding.half()
-	shifted_target_tensor = a_model(shifted_embedding).to(device)
-	target_tensor = a_model(embedding).to(device)
-print (f'Shifted output distance: {torch.sum(torch.abs(shifted_target_tensor - target_tensor))}')
+	shifted_output = a_model(shifted_input)
+	output = a_model(target_logits)
+print (f'Shifted Output Distance: {torch.sum(torch.abs(shifted_output - output))}')
+
+
+def generate_logits(model, target_logits, target_output, lr=0.01):
+	random_input = torch.randn(target_logits.shape).to(device)
+	single_input = octave(random_input, target_output, 500, [lr, lr/10], 0)
+	return single_input
 
 embedding = embedding.detach()
 if load_8bit:
 	target_tensor = target_tensor.half()
 
-generated_input = generate_singleinput(a_model, target_tensor, 0)
+with torch.no_grad():
+	target_tensor = a_model(target_logits)
+
+# generated_input = generate_singleinput(a_model, target_tensor, 0)
+generated_input = generate_logits(a_model, target_logits, target_tensor)
 
 if load_8bit:
 	g_input = generated_input.half()
@@ -254,10 +215,9 @@ else:
 
 generated_target_tensor = a_model(g_input).to(device)
 print (f'Generated output distance: {torch.sum(torch.abs(generated_target_tensor - target_tensor))}')
-logits = torch.matmul(generated_input - positional_embedding, inverse_embedding)
+# logits = torch.matmul(generated_input - positional_embedding, inverse_embedding)
 # tokens = torch.argmax(logits, dim=2)[0]
-tokens = torch.topk(logits, 5)[1][0] # indicies of topk of tensor
-# print (tokens)
+tokens = torch.topk(generated_input, 5)[1][0] # indicies of topk of tensor
 
 for i in range(5):
 	output = tokenizer.decode([o[i] for o in tokens])
@@ -279,15 +239,15 @@ def masked_decode(logits: torch.tensor, allowed_tokens: torch.tensor) -> str:
 
 	return output
 
-allowed_words = 'The sky is blue or red depending on the time of day.'
+allowed_words = 'This is a prompt sentence with some extra words attached to increase the allowed vocabulary by a small margin'
 allowed_tokens = tokenizer.encode(allowed_words)
-masked_decode(logits, allowed_tokens)
+masked_decode(generated_input, allowed_tokens)
 
 def check_equality(input, generated_input):
 	encoded_input = tokenizer.encode(input, return_tensors='pt').to(device)
 	encoded_gen = tokenizer.encode(generated_input, return_tensors='pt').to(device)
 
-	next_token = torch.a+rgmax(model(encoded_input)[0][:, -1, :])
+	next_token = torch.argmax(model(encoded_input)[0][:, -1, :])
 	next_word = tokenizer.decode(next_token)
  
 	print (f'Next input word: {next_word}')
@@ -298,4 +258,4 @@ def check_equality(input, generated_input):
  
 	return next_word, next_gen_word
 
-# check_equality(prompt, output)
+check_equality(prompt, output)

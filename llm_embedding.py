@@ -13,31 +13,18 @@ from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, MSELoss
 
 # import third party libraries
 import numpy as np
-import torch
-from torch import nn
-from torch.nn import Conv2d
 from torch.utils.data import DataLoader, Dataset
 import torchvision
 import matplotlib.pyplot as plt
-import torch
 from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
-import torch
-from transformers import GPT2Config, GPT2LMHeadModel
-
-# configuration = GPT2Config()
-# model = GPT2LMHeadModel(configuration)
-# tokenizer = torch.hub.load('huggingface/pytorch-transformers', 'tokenizer', 'gpt2')
-
-
-load_8bit = False
 
 tokenizer = AutoTokenizer.from_pretrained("gpt2")
 print ('tokenizer downloaded or loaded from cache')
 
-
-model = AutoModelForCausalLM.from_pretrained("gpt2", load_in_8bit=load_8bit, device_map='auto')
+load_8bit = True
+model = AutoModelForCausalLM.from_pretrained("gpt2-xl", load_in_8bit=load_8bit, device_map='auto')
 print ('model downloaded or loaded from cache')
 
 # send model to GPU if available
@@ -76,22 +63,11 @@ def octave(single_input, target_output, iterations, learning_rates, index):
 		input_grad, loss = layer_gradient(model, single_input, target_output, index)
 		single_input = single_input.detach()
 		single_input -= (start_lr*(iterations-i)/iterations + end_lr*i/iterations)*input_grad
-		# if i > 20:
-		# 	losses.append(loss)
-		# 	i_arr.append(i)
-		# logits = torch.matmul(single_input.clone(), inverse_embedding)
-		# tokens = torch.argmax(logits, dim=2)[0]
-		# with torch.no_grad():
-		#     single_input = model.transformer.wte(tokens).reshape(input_grad.shape)
 
-	# plt.scatter(i_arr, losses, s=1)
-	# plt.ylim((0, 500000))
-	# plt.savefig('scatter.png', dpi=250)
-	# plt.close()
 	return single_input
- 
 
-def generate_singleinput(model, target, index, lr=0.1): # 0.0007
+
+def generate_singleinput(model, target, index, lr=0.005): # 0.0007
 	"""
 	Generates an input for a given output
 
@@ -103,14 +79,14 @@ def generate_singleinput(model, target, index, lr=0.1): # 0.0007
 
 	returns:
 		None (saves .png image)
-	""" 
+	"""
 	random_input = torch.randn(embedding.shape).to(device)
-	single_input = octave(random_input, target, 2000, [lr, lr/100], index)
+	single_input = octave(random_input, target, 100, [lr, lr/10], index)
 	
 	return single_input
 
 
-def layer_gradient(model, input_tensor, target, index, cosine_metric=False):
+def layer_gradient(model, input_tensor, target, index):
 	"""
 	Compute the gradient of some layer (chosen previously to be the model output)
 	w.r.t the input.
@@ -130,9 +106,6 @@ def layer_gradient(model, input_tensor, target, index, cosine_metric=False):
 		input_tensor = input_tensor.half()
 	input_tensor.requires_grad = True
 	output = a_model(input_tensor)
-	output, target = output.flatten(), target.flatten()
-	if cosine_metric:
-		loss = torch.abs(torch.dot(output, target)) / (torch.norm(output, p=2) * torch.norm(target, p=2))
 	loss = torch.sum(torch.abs(target - output))
 	loss.backward()
 	gradient = input_tensor.grad
@@ -170,24 +143,10 @@ class AbbreviatedGPT(nn.Module):
 	def forward(self, x: torch.Tensor):
 		# Reshape and permute the input tensor
 
-		for i in range(1):
-
+		for i in range(24):
 			x = self.model.transformer.h[i](x)[0]
 
 		# x = self.model.lm_head(x)
-		return x
-
-class MLPGPT(nn.Module):
-
-	def __init__(self, model):
-		super().__init__()
-		self.model = model
-
-	def forward(self, x: torch.tensor):
-
-		for i in range(1):
-			x = self.model.transformer.h[i].mlp(x)
-
 		return x
 
 class InputGPT(nn.Module):
@@ -230,7 +189,6 @@ tokens = torch.argmax(logits, dim=2)[0]
 output = tokenizer.decode(tokens)
 
 a_model = AbbreviatedGPT(model).to(device)
-# a_model = MLPGPT(model).to(device)
 # a_model = FCNet().to(device)  
 
 a_model.eval()
@@ -244,50 +202,24 @@ print (f'Shifted output distance: {torch.sum(torch.abs(shifted_target_tensor - t
 embedding = embedding.detach()
 if load_8bit:
 	target_tensor = target_tensor.half()
-
 generated_input = generate_singleinput(a_model, target_tensor, 0)
-
-if load_8bit:
-	g_input = generated_input.half()
-else:
-	g_input = generated_input
-
-generated_target_tensor = a_model(g_input).to(device)
+generated_target_tensor = a_model(generated_input).to(device)
 print (f'Generated output distance: {torch.sum(torch.abs(generated_target_tensor - target_tensor))}')
 logits = torch.matmul(generated_input - positional_embedding, inverse_embedding)
 # tokens = torch.argmax(logits, dim=2)[0]
 tokens = torch.topk(logits, 5)[1][0] # indicies of topk of tensor
 # print (tokens)
 
+
 for i in range(5):
 	output = tokenizer.decode([o[i] for o in tokens])
 	print (output)
-print ('\n')
-
-def masked_decode(logits: torch.tensor, allowed_tokens: torch.tensor) -> str:
-	"""
-	Decode an output tensor via 
-	"""
-	
-	mask_tensor = torch.zeros(logits.shape).to(device)
-	# print (mask_tensor.shape)
-	mask_tensor[:, :, allowed_tokens] = 1.
-	masked_logits = logits * mask_tensor
-	allowed_output = torch.argmax(masked_logits, dim=2)[0]
-	output = tokenizer.decode(allowed_output)
-	print ('Limited output: \n', output)
-
-	return output
-
-allowed_words = 'The sky is blue or red depending on the time of day.'
-allowed_tokens = tokenizer.encode(allowed_words)
-masked_decode(logits, allowed_tokens)
 
 def check_equality(input, generated_input):
 	encoded_input = tokenizer.encode(input, return_tensors='pt').to(device)
 	encoded_gen = tokenizer.encode(generated_input, return_tensors='pt').to(device)
 
-	next_token = torch.a+rgmax(model(encoded_input)[0][:, -1, :])
+	next_token = torch.argmax(model(encoded_input)[0][:, -1, :])
 	next_word = tokenizer.decode(next_token)
  
 	print (f'Next input word: {next_word}')
@@ -295,7 +227,56 @@ def check_equality(input, generated_input):
 	next_gen_token = torch.argmax(model(encoded_gen)[0][:, -1, :])
 	next_gen_word = tokenizer.decode(next_gen_token)
 	print (f'Next generated input word: {next_gen_word}')
- 
+
 	return next_word, next_gen_word
 
-# check_equality(prompt, output)
+check_equality(prompt, output)
+
+
+
+def kmeans_cluster(embeddings, n_clusters, *labels):
+	kmeans = KMeans(n_clusters=n_clusters)
+	kmeans.fit(embeddings)
+	return kmeans.labels_
+
+
+def plot_pca(embeddings, components=2):
+	pca = PCA(n_components=components, svd_solver='full')
+	rows = [i for i in range(len(embeddings))] # assumes squeezed embedding
+	pca.fit(embeddings)
+	new_output = pca.transform(embeddings)
+	x, y = [i[0] for i in new_output], [i[1] for i in new_output]
+	plt.scatter(x, y)
+	# label inputs
+	for i, txt in enumerate(rows):
+		plt.annotate(rows[i], (x[i], y[i]))
+
+	plt.savefig('pca_plot.png', dpi=300)
+	plt.close()
+	return
+
+
+def tsne_with_kmeans_labels(embeddings, n_clusters=4):
+	labels = kmeans_cluster(o)
+	tsne = TSNE(n_components=2, init='random', perplexity=30)
+	tsne.fit(embeddings)
+	new_output = tsne.fit_transform(embeddings)
+
+	plt.figure(figsize=(10, 10), dpi=300)
+	for label in range(n_clusters):
+		final_output = [new_output[i] for i in range(len(new_output)) if labels[i] == label]
+		x, y = [i[0] for i in final_output], [i[1] for i in final_output]
+		plt.scatter(x, y, label=label, alpha=0.5)
+		for i in range(len(final_output)):
+			plt.annotate(label, (x[i], y[i]))
+
+	plt.legend()
+	plt.savefig('tsne_figure.png', dpi=300, layout='tight')
+	plt.close()
+	return
+
+
+embedding = e_model(input_tokens)
+plot_pca(embedding, components=2)
+kmeans_cluster(embedding, 2)
+tsne_with_kmeans_labels(embedding)

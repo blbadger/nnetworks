@@ -30,7 +30,6 @@ from transformers import GPT2Config, GPT2LMHeadModel
 # model = GPT2LMHeadModel(configuration)
 # tokenizer = torch.hub.load('huggingface/pytorch-transformers', 'tokenizer', 'gpt2')
 
-
 load_8bit = False
 
 tokenizer = AutoTokenizer.from_pretrained("gpt2")
@@ -128,11 +127,13 @@ def layer_gradient(model, input_tensor, target, index, cosine_metric=False):
 	global load_8bit
 	if load_8bit:
 		input_tensor = input_tensor.half()
+
 	input_tensor.requires_grad = True
 	output = a_model(input_tensor)
 	output, target = output.flatten(), target.flatten()
 	if cosine_metric:
 		loss = torch.abs(torch.dot(output, target)) / (torch.norm(output, p=2) * torch.norm(target, p=2))
+
 	loss = torch.sum(torch.abs(target - output))
 	loss.backward()
 	gradient = input_tensor.grad

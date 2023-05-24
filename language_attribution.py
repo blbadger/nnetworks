@@ -153,7 +153,7 @@ print ('model downloaded or loaded from cache') # or "gpt2-xl" etc.
 model.eval()
 
 if __name__ == '__main__':
-	input_sequence = 'The wheels on the bus go round and'
+	input_sequence = 'The wipers on the bus go swish swish'
 	input_sequence = input_sequence.strip()
 	gevaluate = GPTEval(model, input_sequence)
 	input_ids = gevaluate.input_ids[0]

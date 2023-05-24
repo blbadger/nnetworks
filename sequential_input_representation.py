@@ -8,18 +8,14 @@ from typing import Optional, Tuple, Union
 import torch
 import torch.utils.checkpoint
 from torch import nn
-from torch.cuda.amp import autocast
-from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, MSELoss
 
 # import third party libraries
 import numpy as np
-import torch
 from torch import nn
 from torch.nn import Conv2d
 from torch.utils.data import DataLoader, Dataset
 import torchvision
 import matplotlib.pyplot as plt
-import torch
 from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
@@ -32,12 +28,11 @@ from transformers import GPT2Config, GPT2LMHeadModel
 
 load_8bit = False
 
-tokenizer = AutoTokenizer.from_pretrained("gpt2")
-print ('tokenizer downloaded or loaded from cache')
+# tokenizer = AutoTokenizer.from_pretrained("gpt2")
+# print ('tokenizer downloaded or loaded from cache')
 
-
-model = AutoModelForCausalLM.from_pretrained("gpt2", load_in_8bit=load_8bit, device_map='auto')
-print ('model downloaded or loaded from cache')
+# model = AutoModelForCausalLM.from_pretrained("gpt2", load_in_8bit=load_8bit, device_map='auto')
+# print ('model downloaded or loaded from cache')
 
 # send model to GPU if available
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -72,51 +67,54 @@ def octave(single_input, target_output, iterations, learning_rates, index):
 	losses, i_arr = [], []
 
 	for i in range(iterations):
-		input_grad, loss = layer_gradient(model, single_input, target_output, index)
+		input_grad, loss = layer_gradient(single_input, target_output, index)
 		single_input = single_input.detach()
 		single_input -= (start_lr*(iterations-i)/iterations + end_lr*i/iterations)*input_grad
-		# if i > 20:
-		# 	losses.append(loss)
-		# 	i_arr.append(i)
-		# logits = torch.matmul(single_input.clone(), inverse_embedding)
-		# tokens = torch.argmax(logits, dim=2)[0]
-		# with torch.no_grad():
-		#     single_input = model.transformer.wte(tokens).reshape(input_grad.shape)
 
-	# plt.scatter(i_arr, losses, s=1)
-	# plt.ylim((0, 500000))
-	# plt.savefig('scatter.png', dpi=250)
-	# plt.close()
 	return single_input
  
 
-def generate_singleinput(model, target, index, lr=0.1): # 0.0007
+def generate_expanding_input(model, target, index, lr=0.5): # 0.0007
 	"""
-	Generates an input for a given output
-
-	Args:
-		model: torch.nn object
-		target: torch.tensor object, minibatch of outputs
-	kwargs: 
-		lr: float, learning rate
-
-	returns:
-		single_input
-
+	Generates a natural language input representation sequentially
 	""" 
-	random_input = torch.randn(embedding.shape).to(device)
-	single_input = octave(random_input, target, 2000, [lr, lr/100], index)
-	
-	return single_input
+	n_tokens = len(target[0])
+	full_input = []
+	embedding_dim = target.shape[-1]
+	starting_input = torch.randn(1, 1, embedding_dim).to(device)
+	combined_input = torch.clone(starting_input)
+	for i in range(n_tokens):
+		combined_input = combined_input.detach().clone()
+		single_input = octave(combined_input, target[:, :i+1, :], 500, [lr, lr/100], i)
+		random_addition = torch.randn(starting_input.shape).to(device)
+		combined_input = torch.cat((combined_input, random_addition), dim=1)
 
+	return combined_input[:, :-1, :]
 
-def layer_gradient(model, input_tensor, target, index, cosine_metric=False):
+def generate_sequential_input(model, target, index, lr=0.1):
+	"""
+	Generates a natural language input representation sequentially
+	""" 
+	n_tokens = len(target[0])
+	full_input = []
+	embedding_dim = target.shape[-1]
+	starting_input = torch.randn(1, 1, embedding_dim).to(device)
+	combined_input = torch.clone(starting_input)
+	for i in range(n_tokens):
+		random_input = torch.randn(starting_input.shape).to(device)
+		focused_target = target[:, i, :]
+		print (focused_target.shape)
+		single_input = octave(random_input, focused_target, 2000, [lr, lr/10], i)
+		combined_input = torch.cat((combined_input, single_input), dim=1)
+
+	return combined_input[:, 1:, :]
+
+def layer_gradient(input_tensor, target, index, cosine_metric=False):
 	"""
 	Compute the gradient of some layer (chosen previously to be the model output)
 	w.r.t the input.
 
 	Args:
-		model: torch.nn.model
 		input_tensor: torch.tensor object corresponding to the input
 		target: torch.tensor object of the output given the input
 		index: int, chooses the layer number to investigate
@@ -140,6 +138,7 @@ def layer_gradient(model, input_tensor, target, index, cosine_metric=False):
 	gradient = input_tensor.grad
 
 	return gradient, loss.item()
+
 
 class FCNet(nn.Module):
 
@@ -217,6 +216,7 @@ tokens = tokenizer.encode(
 	  padding=False
 	  ).to(device)
 
+
 model = model.to(device)
 embedding = model.transformer.wte(tokens) 
 position_ids = torch.tensor([i for i in range(len(tokens))]).to(device)
@@ -247,7 +247,7 @@ embedding = embedding.detach()
 if load_8bit:
 	target_tensor = target_tensor.half()
 
-generated_input = generate_singleinput(a_model, target_tensor, 0)
+generated_input = generate_sequential_input(a_model, target_tensor, 0)
 
 if load_8bit:
 	g_input = generated_input.half()
@@ -289,7 +289,7 @@ def check_equality(input, generated_input):
 	encoded_input = tokenizer.encode(input, return_tensors='pt').to(device)
 	encoded_gen = tokenizer.encode(generated_input, return_tensors='pt').to(device)
 
-	next_token = torch.a+rgmax(model(encoded_input)[0][:, -1, :])
+	next_token = torch.argmax(model(encoded_input)[0][:, -1, :])
 	next_word = tokenizer.decode(next_token)
  
 	print (f'Next input word: {next_word}')
